@@ -1,0 +1,88 @@
+# Toda la configuración sensible o dependiente del entorno llega por variables de entorno.
+spring:
+  application:
+    name: reservas-servicios
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        type:
+          preferred_duration_jdbc_type: INTERVAL_SECOND
+  flyway:
+    locations: classpath:db/migration
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+  web:
+    locale: es
+    locale-resolver: fixed
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+
+app:
+  base-url: ${APP_BASE_URL}
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION:30m}
+    issuer: ${JWT_ISSUER:reservas-servicios}
+  mail:
+    remitente: ${APP_MAIL_FROM:no-reply@reservas.local}
+  seguridad:
+    bcrypt-fuerza: ${BCRYPT_STRENGTH:10}
+    login:
+      max-intentos: ${LOGIN_MAX_ATTEMPTS:5}
+      duracion-bloqueo: ${LOGIN_LOCK_DURATION:15m}
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    mail:
+      enabled: false
+
+---
+# Logs estructurados en JSON (ECS) fuera de los perfiles de desarrollo y pruebas.
+spring:
+  config:
+    activate:
+      on-profile: "!dev & !test"
+logging:
+  structured:
+    format:
+      console: ecs

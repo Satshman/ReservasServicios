@@ -1,0 +1,19 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.properties
+
+# Entorno y secretos
+.env
+*.env.local
+
+# IDE y sistema
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.DS_Store
+
+# Logs
+*.log

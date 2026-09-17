@@ -1,0 +1,19 @@
+# El datasource lo aporta Testcontainers (@ServiceConnection) y el correo se reemplaza por un doble de prueba.
+spring:
+  mail:
+    host: localhost
+    port: 2525
+
+app:
+  base-url: http://localhost:8080
+  cors:
+    allowed-origins: http://localhost:3000
+  jwt:
+    secret: clave-de-pruebas-automatizadas-no-usar-en-produccion
+  seguridad:
+    bcrypt-fuerza: 4
+
+logging:
+  level:
+    org.testcontainers: WARN
+    tc: WARN

@@ -1,0 +1,16 @@
+# Valores locales que coinciden con docker-compose.yml. No usar en producción.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/reservas}
+    username: ${DB_USERNAME:reservas}
+    password: ${DB_PASSWORD:reservas}
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  jwt:
+    secret: ${JWT_SECRET:solo-desarrollo-local-no-usar-en-produccion-0123456789}
