@@ -1,0 +1,8 @@
+.git
+.idea
+.vscode
+.atl
+docs
+target
+*.iml
+.env

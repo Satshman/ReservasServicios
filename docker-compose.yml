@@ -1,0 +1,53 @@
+# Entorno local: PostgreSQL, Mailpit (SMTP de pruebas) y la aplicación.
+# Uso: cp .env.example .env && podman-compose up --build   (o docker compose up --build)
+name: reservas-servicios
+
+services:
+  db:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-reservas}
+      POSTGRES_USER: ${POSTGRES_USER:-reservas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-reservas}
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
+    volumes:
+      - datos-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  mailpit:
+    image: docker.io/axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+
+  app:
+    build: .
+    image: localhost/reservas-servicios-app:latest
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-reservas}
+      DB_USERNAME: ${POSTGRES_USER:-reservas}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-reservas}
+      # Obligatorio (>= 32 bytes). Si falta, la aplicación no arranca y lo indica en el log.
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-30m}
+      MAIL_HOST: mailpit
+      MAIL_PORT: "1025"
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8081}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_LOCK_DURATION: ${LOGIN_LOCK_DURATION:-15m}
+    ports:
+      - "${APP_HOST_PORT:-8081}:8080"
+
+volumes:
+  datos-postgres:
