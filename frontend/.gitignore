@@ -1,0 +1,11 @@
+node_modules
+dist
+dist-ssr
+.env
+.env.local
+.env.*.local
+*.local
+.vite
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

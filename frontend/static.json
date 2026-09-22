@@ -1,0 +1,9 @@
+{
+  "//": "Reescritura para SPA: cualquier ruta del router se sirve desde index.html. En Render se configura como Redirect/Rewrite Rule (Source /* -> Destination /index.html, Action Rewrite).",
+  "rewrites": [
+    {
+      "source": "/*",
+      "destination": "/index.html"
+    }
+  ]
+}
