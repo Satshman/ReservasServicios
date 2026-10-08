@@ -2,6 +2,7 @@ package co.reservas.application.service.reserva;
 
 import co.reservas.application.port.in.auth.UsuarioAutenticado;
 import co.reservas.application.port.in.recurso.RecursoResultado;
+import co.reservas.application.port.in.reserva.CancelarReservaUseCase;
 import co.reservas.application.port.in.reserva.ConsultarReservasUseCase;
 import co.reservas.application.port.in.reserva.CrearReservaComando;
 import co.reservas.application.port.in.reserva.CrearReservaUseCase;
@@ -44,7 +45,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
-public class ReservaService implements CrearReservaUseCase, ConsultarReservasUseCase {
+public class ReservaService implements CrearReservaUseCase, ConsultarReservasUseCase, CancelarReservaUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ReservaService.class);
 
@@ -119,6 +120,32 @@ public class ReservaService implements CrearReservaUseCase, ConsultarReservasUse
                 .addKeyValue("idUsuario", usuario.idUsuario())
                 .log("Reserva creada");
         return mapear(reserva, servicio, contexto.zona(), indexar(recursosBloqueados));
+    }
+
+    /**
+     * Orden de validación: existencia (404), propiedad (403) y reglas de estado y tiempo (409, 422). Solo se bloquea
+     * la fila de la reserva, lo que evita cancelaciones dobles y su historial duplicado; cancelar únicamente libera
+     * cupo y recursos, así que no compite con {@link #crear}, que serializa por cliente, servicio y recursos.
+     */
+    @Override
+    @Transactional
+    public ReservaResultado cancelar(UsuarioAutenticado usuario, Integer idReserva) {
+        Reserva reserva = reservas.bloquearPorId(idReserva)
+                .orElseThrow(() -> new ExcepcionNegocio(CodigoError.RESERVA_NO_ENCONTRADA, "La reserva no existe."));
+        verificador.exigirAccesoAReserva(usuario, reserva);
+        Instant ahora = Instant.now(clock);
+        Reserva cancelada = reserva.cancelar(ahora);
+        reservas.actualizarEstado(cancelada);
+        reservas.registrarHistorial(
+                HistorialReserva.cambioDeEstado(reserva.estado(), cancelada, usuario.idUsuario(), ahora));
+        log.atInfo()
+                .addKeyValue("evento", "RESERVA_CANCELADA")
+                .addKeyValue("idReserva", cancelada.id())
+                .addKeyValue("idServicio", cancelada.idServicio())
+                .addKeyValue("idUsuario", usuario.idUsuario())
+                .addKeyValue("rol", usuario.rol())
+                .log("Reserva cancelada");
+        return mapearTodas(List.of(cancelada)).getFirst();
     }
 
     @Override

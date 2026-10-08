@@ -31,6 +31,7 @@ import co.reservas.application.port.in.auth.UsuarioAutenticado;
 import co.reservas.application.port.in.auth.VerificarCuentaUseCase;
 import co.reservas.application.port.in.recurso.CrearRecursoComando;
 import co.reservas.application.port.in.recurso.GestionarRecursosUseCase;
+import co.reservas.application.port.in.reserva.CancelarReservaUseCase;
 import co.reservas.application.port.in.reserva.ConsultarDisponibilidadUseCase;
 import co.reservas.application.port.in.reserva.ConsultarReservasUseCase;
 import co.reservas.application.port.in.reserva.CrearReservaComando;
@@ -163,13 +164,14 @@ class ControladoresTest {
     }
 
     @Test
-    @DisplayName("Dado un cliente autenticado, cuando consulta disponibilidad y reserva, entonces se invocan los casos de uso con sus datos")
+    @DisplayName("Dado un usuario autenticado, cuando consulta disponibilidad, reserva o cancela, entonces se invocan los casos de uso con sus datos")
     void reservaController() {
         // Arrange
         CrearReservaUseCase crear = mock(CrearReservaUseCase.class);
         ConsultarReservasUseCase consultar = mock(ConsultarReservasUseCase.class);
         ConsultarDisponibilidadUseCase disponibilidad = mock(ConsultarDisponibilidadUseCase.class);
-        ReservaController controlador = new ReservaController(crear, consultar, disponibilidad);
+        CancelarReservaUseCase cancelar = mock(CancelarReservaUseCase.class);
+        ReservaController controlador = new ReservaController(crear, consultar, disponibilidad, cancelar);
         OffsetDateTime inicio = OffsetDateTime.parse("2026-10-12T10:00:00-05:00");
         LocalDate lunes = LocalDate.of(2026, 10, 12);
 
@@ -178,11 +180,15 @@ class ControladoresTest {
         controlador.crear(jwt(30, Rol.CLIENTE), new ReservaRequest(7, inicio));
         controlador.mias(jwt(30, Rol.CLIENTE));
         controlador.porServicio(jwt(20, Rol.PROVEEDOR), 7);
+        controlador.cancelar(jwt(30, Rol.CLIENTE), 5);
+        controlador.cancelar(jwt(20, Rol.PROVEEDOR), 6);
 
         // Assert
         verify(disponibilidad).consultar(7, lunes, lunes);
         verify(crear).crear(new UsuarioAutenticado(30, Rol.CLIENTE), new CrearReservaComando(7, inicio));
         verify(consultar).consultarMias(new UsuarioAutenticado(30, Rol.CLIENTE));
         verify(consultar).consultarPorServicio(new UsuarioAutenticado(20, Rol.PROVEEDOR), 7);
+        verify(cancelar).cancelar(new UsuarioAutenticado(30, Rol.CLIENTE), 5);
+        verify(cancelar).cancelar(new UsuarioAutenticado(20, Rol.PROVEEDOR), 6);
     }
 }

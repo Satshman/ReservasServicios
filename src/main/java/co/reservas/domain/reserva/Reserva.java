@@ -1,6 +1,8 @@
 package co.reservas.domain.reserva;
 
 import co.reservas.domain.servicio.Servicio;
+import co.reservas.domain.shared.CodigoError;
+import co.reservas.domain.shared.ExcepcionNegocio;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -42,5 +44,21 @@ public record Reserva(
     public Reserva conId(Integer nuevoId) {
         return new Reserva(nuevoId, idCliente, idServicio, estado, fechaHoraInicio, fechaHoraFin, creadoEn,
                 idsRecursos);
+    }
+
+    public Reserva cancelar(Instant ahora) {
+        if (estado == EstadoReserva.CANCELADA) {
+            throw new ExcepcionNegocio(CodigoError.RESERVA_NO_CANCELABLE, "La reserva ya está cancelada.");
+        }
+        if (estado == EstadoReserva.COMPLETADA) {
+            throw new ExcepcionNegocio(CodigoError.RESERVA_NO_CANCELABLE,
+                    "No se puede cancelar una reserva completada.");
+        }
+        if (!fechaHoraInicio.isAfter(ahora)) {
+            throw new ExcepcionNegocio(CodigoError.RESERVA_EN_EL_PASADO,
+                    "No se puede cancelar una reserva que ya comenzó.");
+        }
+        return new Reserva(id, idCliente, idServicio, EstadoReserva.CANCELADA, fechaHoraInicio, fechaHoraFin,
+                creadoEn, idsRecursos);
     }
 }

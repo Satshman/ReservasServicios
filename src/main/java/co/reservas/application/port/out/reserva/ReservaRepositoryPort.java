@@ -8,12 +8,23 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface ReservaRepositoryPort {
 
     Reserva guardar(Reserva reserva);
 
     void registrarHistorial(HistorialReserva historial);
+
+    /**
+     * Busca la reserva bloqueando su fila ({@code SELECT ... FOR UPDATE}) hasta el fin de la transacción.
+     */
+    Optional<Reserva> bloquearPorId(Integer idReserva);
+
+    /**
+     * Guarda el estado de una reserva existente.
+     */
+    void actualizarEstado(Reserva reserva);
 
     long contarConfirmadasEnTurno(Integer idServicio, Instant inicio);
 

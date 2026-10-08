@@ -50,6 +50,10 @@ public class ReservaEntity {
         this.creadoEn = creadoEn;
     }
 
+    public void cambiarEstado(Integer nuevoIdEstado) {
+        this.idEstado = nuevoIdEstado;
+    }
+
     public Integer getId() {
         return id;
     }

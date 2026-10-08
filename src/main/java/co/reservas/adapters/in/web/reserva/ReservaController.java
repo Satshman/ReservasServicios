@@ -2,6 +2,7 @@ package co.reservas.adapters.in.web.reserva;
 
 import co.reservas.adapters.in.web.ApiRutas;
 import co.reservas.adapters.in.web.auth.SesionActual;
+import co.reservas.application.port.in.reserva.CancelarReservaUseCase;
 import co.reservas.application.port.in.reserva.ConsultarDisponibilidadUseCase;
 import co.reservas.application.port.in.reserva.ConsultarReservasUseCase;
 import co.reservas.application.port.in.reserva.CrearReservaUseCase;
@@ -30,18 +31,21 @@ import java.util.List;
 
 @RestController
 @RequestMapping(ApiRutas.V1)
-@Tag(name = "Reservas", description = "Disponibilidad y reservas de turnos (HU-07, HU-09)")
+@Tag(name = "Reservas", description = "Disponibilidad, reservas y cancelación de turnos (HU-07, HU-08, HU-09)")
 public class ReservaController {
 
     private final CrearReservaUseCase crearReserva;
     private final ConsultarReservasUseCase consultarReservas;
     private final ConsultarDisponibilidadUseCase consultarDisponibilidad;
+    private final CancelarReservaUseCase cancelarReserva;
 
     public ReservaController(CrearReservaUseCase crearReserva, ConsultarReservasUseCase consultarReservas,
-                             ConsultarDisponibilidadUseCase consultarDisponibilidad) {
+                             ConsultarDisponibilidadUseCase consultarDisponibilidad,
+                             CancelarReservaUseCase cancelarReserva) {
         this.crearReserva = crearReserva;
         this.consultarReservas = consultarReservas;
         this.consultarDisponibilidad = consultarDisponibilidad;
+        this.cancelarReserva = cancelarReserva;
     }
 
     @GetMapping("/servicios/{idServicio}/disponibilidad")
@@ -67,6 +71,17 @@ public class ReservaController {
     public ReservaResultado crear(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
                                   @Valid @RequestBody ReservaRequest solicitud) {
         return crearReserva.crear(SesionActual.de(jwt), solicitud.aComando());
+    }
+
+    @PostMapping("/reservas/{idReserva}/cancelacion")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Cancelar una reserva (CLIENTE dueño o PROVEEDOR dueño del servicio)",
+            description = "La reserva pasa a CANCELADA, libera su cupo y sus recursos y queda registrada en el "
+                    + "historial. Errores: 403 ACCESO_DENEGADO, 404 RESERVA_NO_ENCONTRADA, 409 RESERVA_NO_CANCELABLE "
+                    + "(ya cancelada o completada), 422 RESERVA_EN_EL_PASADO (la reserva ya comenzó).")
+    public ReservaResultado cancelar(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+                                     @PathVariable Integer idReserva) {
+        return cancelarReserva.cancelar(SesionActual.de(jwt), idReserva);
     }
 
     @GetMapping("/reservas/mias")

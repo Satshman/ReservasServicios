@@ -1,6 +1,6 @@
-# Modelo de datos y paquetes — Sprint 1
+# Modelo de datos y paquetes — Sprints 1 y 2
 
-Diseño aprobado para implementar las HU-01 a HU-07 y HU-09. Consolida el esquema físico de PostgreSQL, la estructura de paquetes hexagonal y el contrato de la API. **Reemplaza a `docs/db.md` y al diagrama `paquetes_&_componentes`** como fuente de verdad; esos diagramas deben actualizarse a partir de este documento.
+Diseño aprobado para implementar las HU-01 a HU-07 y HU-09 (Sprint 1) y la HU-08 (Sprint 2). Consolida el esquema físico de PostgreSQL, la estructura de paquetes hexagonal y el contrato de la API. **Reemplaza a `docs/db.md` y al diagrama `paquetes_&_componentes`** como fuente de verdad; esos diagramas deben actualizarse a partir de este documento.
 
 La plataforma es **agnóstica al negocio**: cualquier establecimiento (clínica, peluquería, gimnasio, academia) se registra como proveedor y configura sus propios servicios, agenda y recursos.
 
@@ -324,11 +324,12 @@ Todos bajo `/api/v1`.
 | HU-07 | `ConsultarDisponibilidadUseCase` | `GET /servicios/{idServicio}/disponibilidad?desde=&hasta=` | Público |
 | HU-07, HU-09 | `CrearReservaUseCase` | `POST /reservas` | CLIENTE |
 | HU-07 | `ConsultarReservasUseCase` | `GET /reservas/mias` · `GET /servicios/{idServicio}/reservas` | CLIENTE · PROVEEDOR dueño |
+| HU-08 (Sprint 2) | `CancelarReservaUseCase` | `POST /reservas/{idReserva}/cancelacion` | CLIENTE dueño · PROVEEDOR dueño del servicio |
 | HU-09 | `GestionarRecursosUseCase` | `POST /recursos` · `GET /recursos` · `PUT /servicios/{idServicio}/recursos` | PROVEEDOR |
 | Soporte | `GestionarServiciosUseCase` | `POST /servicios` (PROVEEDOR) · `GET /servicios` · `GET /servicios/{id}` (públicos) | — |
 | Soporte | `ConsultarCatalogosUseCase` | `GET /catalogos/categorias` · `/tipos-recurso` · `/tipos-documento` | Público |
 
-Componentes nuevos frente al diagrama original: `AuthController`, `ServicioController`, `RecursoController`, `CatalogoController`. Quedan fuera de este sprint: `CancelarReservaUseCase`, `GenerarReporteOcupacionUseCase` y `ReporteController`.
+Componentes nuevos frente al diagrama original: `AuthController`, `ServicioController`, `RecursoController`, `CatalogoController`. `CancelarReservaUseCase` se implementó en el Sprint 2 dentro de `ReservaController`. Quedan pendientes `GenerarReporteOcupacionUseCase` y `ReporteController`.
 
 ---
 
@@ -351,9 +352,9 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
 | 400 / 415 | `VALIDACION_FALLIDA` (details: `campo`, `mensaje`), `SOLICITUD_INVALIDA` (también para 415), `SERVICIO_REQUERIDO`, `TOKEN_VERIFICACION_INVALIDO` |
 | 401 | `NO_AUTENTICADO`, `CREDENCIALES_INVALIDAS` |
 | 403 | `ACCESO_DENEGADO`, `CUENTA_NO_VERIFICADA`, `CUENTA_INACTIVA` |
-| 404 | `SERVICIO_NO_ENCONTRADO`, `HORARIO_NO_ENCONTRADO`, `RECURSO_NO_ENCONTRADO`, `CATEGORIA_NO_ENCONTRADA`, `TIPO_RECURSO_NO_ENCONTRADO`, `RUTA_NO_ENCONTRADA` |
+| 404 | `SERVICIO_NO_ENCONTRADO`, `HORARIO_NO_ENCONTRADO`, `RECURSO_NO_ENCONTRADO`, `CATEGORIA_NO_ENCONTRADA`, `TIPO_RECURSO_NO_ENCONTRADO`, `RESERVA_NO_ENCONTRADA`, `RUTA_NO_ENCONTRADA` |
 | 405 | `METODO_NO_PERMITIDO` |
-| 409 | `EMAIL_YA_REGISTRADO`, `SERVICIO_YA_REGISTRADO`, `RECURSO_YA_REGISTRADO`, `HORARIO_SOLAPADO`, `HORARIO_CON_RESERVAS`, `TURNO_SIN_CUPO`, `RECURSO_NO_DISPONIBLE`, `RESERVA_SOLAPADA` |
+| 409 | `EMAIL_YA_REGISTRADO`, `SERVICIO_YA_REGISTRADO`, `RECURSO_YA_REGISTRADO`, `HORARIO_SOLAPADO`, `HORARIO_CON_RESERVAS`, `TURNO_SIN_CUPO`, `RECURSO_NO_DISPONIBLE`, `RESERVA_SOLAPADA`, `RESERVA_NO_CANCELABLE` |
 | 422 | `RESERVA_EN_EL_PASADO`, `HORARIO_NO_DISPONIBLE`, `SERVICIO_NO_DISPONIBLE`, `BLOQUE_MENOR_A_DURACION` |
 | 423 | `CUENTA_BLOQUEADA` |
 | 500 | `ERROR_INTERNO` (sin detalles internos) |
@@ -407,6 +408,16 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
 - Se crea en `CONFIRMADA`, con sus recursos y una fila de historial (`id_estado_anterior` nulo). Respuesta `201` con la reserva y sus recursos.
 - **Disponibilidad**: `desde`/`hasta` son fechas en la zona del proveedor, con un rango máximo de 31 días. Devuelve los turnos futuros con `cuposDisponibles > 0` y sin recursos ocupados.
 
+### HU-08 — Cancelar reserva (Sprint 2)
+- Sin cuerpo: `POST /reservas/{idReserva}/cancelacion`.
+- Validaciones, en orden:
+  1. Se bloquea la fila de la reserva (`FOR UPDATE`); si no existe → `404 RESERVA_NO_ENCONTRADA`. Bloquear solo la reserva evita cancelaciones dobles y su historial duplicado; como cancelar solo libera cupo y recursos, no compite con la creación de reservas.
+  2. Propiedad (ABAC): solo el cliente que hizo la reserva o el proveedor dueño del servicio; cualquier otro usuario, incluido `ADMIN` → `403 ACCESO_DENEGADO`.
+  3. Estado: `CANCELADA` o `COMPLETADA` → `409 RESERVA_NO_CANCELABLE`.
+  4. Tiempo: la reserva ya comenzó (`fechaHoraInicio <= ahora`) → `422 RESERVA_EN_EL_PASADO`.
+- La reserva pasa a `CANCELADA` y se agrega una fila de historial con el estado anterior y el usuario que canceló. Como la disponibilidad, el cupo y los conflictos de recursos solo cuentan reservas `CONFIRMADA`, el turno y sus recursos quedan libres sin borrar filas de `tbl_reservas_recursos`.
+- Se registra el evento `RESERVA_CANCELADA` (id de reserva, servicio, usuario y rol). Respuesta `200` con la reserva actualizada.
+
 ### HU-09 — Controlar disponibilidad de recursos
 - La reserva ocupa **todos** los recursos activos asociados al servicio.
 - Los recursos se bloquean `FOR UPDATE` en orden de id (evita deadlocks).
@@ -420,7 +431,8 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
 
 | Tema | Estado |
 |------|--------|
-| Cancelar reserva, reportes de ocupación | Fuera de este sprint |
+| Cancelar reserva (HU-08) | Implementada en el Sprint 2 |
+| Reportes de ocupación | Pendiente |
 | MFA para administradores, refresh tokens y revocación | Sprint 3 ("aseguramiento mediante tokens") |
 | Endpoints de excepciones de disponibilidad | Solo existe la tabla |
 | Procedimiento almacenado o trigger | Sprint 3 (Bases de Datos) |

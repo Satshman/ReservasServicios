@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -47,6 +48,19 @@ public class ReservaRepositoryJpaAdapter implements ReservaRepositoryPort {
         historial.save(new HistorialReservaEntity(cambio.idReserva(), catalogo.idEstadoReservaONulo(
                 cambio.estadoAnterior()), catalogo.idEstado(cambio.estadoNuevo()), cambio.idUsuario(),
                 cambio.fechaCambio()));
+    }
+
+    @Override
+    public Optional<Reserva> bloquearPorId(Integer idReserva) {
+        return reservas.bloquearPorId(idReserva).map(entidad -> aDominio(List.of(entidad)).getFirst());
+    }
+
+    @Override
+    public void actualizarEstado(Reserva reserva) {
+        ReservaEntity entidad = reservas.findById(reserva.id())
+                .orElseThrow(() -> new IllegalStateException("Reserva inexistente: " + reserva.id()));
+        entidad.cambiarEstado(catalogo.idEstado(reserva.estado()));
+        reservas.saveAndFlush(entidad);
     }
 
     @Override

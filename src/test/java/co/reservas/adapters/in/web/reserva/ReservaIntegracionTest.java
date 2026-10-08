@@ -1,6 +1,7 @@
 package co.reservas.adapters.in.web.reserva;
 
 import co.reservas.application.port.in.auth.UsuarioAutenticado;
+import co.reservas.application.port.in.reserva.CancelarReservaUseCase;
 import co.reservas.application.port.in.reserva.CrearReservaComando;
 import co.reservas.application.port.in.reserva.CrearReservaUseCase;
 import co.reservas.domain.shared.CodigoError;
@@ -13,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +36,7 @@ import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @DisplayName("HU-07 / HU-09 - Reservas y disponibilidad de recursos")
 class ReservaIntegracionTest extends PruebaIntegracion {
@@ -45,6 +49,9 @@ class ReservaIntegracionTest extends PruebaIntegracion {
 
     @Autowired
     private CrearReservaUseCase crearReserva;
+
+    @Autowired
+    private CancelarReservaUseCase cancelarReserva;
 
     private static String lunes(String hora) {
         return PROXIMO_LUNES + "T" + hora + ":00-05:00";
@@ -60,6 +67,38 @@ class ReservaIntegracionTest extends PruebaIntegracion {
 
     private static int idUsuarioDe(String email, JdbcTemplate jdbc) {
         return jdbc.queryForObject("select id from tbl_usuarios where email = ?", Integer.class, email);
+    }
+
+    private record ClienteDePrueba(String email, String token, int idUsuario) {
+    }
+
+    /** Cliente verificado con sesión, con los datos necesarios para volver a iniciar sesión y auditar el historial. */
+    private ClienteDePrueba clienteConDatos() throws Exception {
+        String email = emailUnico("cliente");
+        registrarCliente(email).andExpect(status().isCreated());
+        verificarCuenta(email);
+        return new ClienteDePrueba(email, tokenDe(email), idUsuarioDe(email, jdbc));
+    }
+
+    private int reservarYObtenerId(String token, int idServicio, String inicio) throws Exception {
+        MvcResult resultado = reservar(token, idServicio, inicio).andExpect(status().isCreated()).andReturn();
+        return leer(resultado).get("id").asInt();
+    }
+
+    private ResultActions cancelar(String token, Object idReserva) throws Exception {
+        return enviar(post(V1 + "/reservas/" + idReserva + "/cancelacion"), null, token);
+    }
+
+    private String estadoDe(int idReserva) {
+        return jdbc.queryForObject("select e.nombre from tbl_reservas r join tbl_estados e on e.id = r.id_estado "
+                + "where r.id = ?", String.class, idReserva);
+    }
+
+    private List<Map<String, Object>> historialDe(int idReserva) {
+        return jdbc.queryForList("select ea.nombre as anterior, en.nombre as nuevo, h.id_usuario "
+                + "from tbl_historial_reservas h join tbl_estados en on en.id = h.id_estado_nuevo "
+                + "left join tbl_estados ea on ea.id = h.id_estado_anterior where h.id_reserva = ? order by h.id",
+                idReserva);
     }
 
     @Nested
@@ -268,6 +307,230 @@ class ReservaIntegracionTest extends PruebaIntegracion {
             mockMvc.perform(get(V1 + "/servicios/999999/disponibilidad").param("desde", PROXIMO_LUNES)
                             .param("hasta", PROXIMO_LUNES))
                     .andExpect(status().isNotFound());
+        }
+    }
+
+     @Nested
+    @DisplayName("HU-08 - Cancelar reserva")
+    class CancelarReserva {
+
+        @Test
+        @DisplayName("Dado una reserva confirmada, cuando el cliente la cancela, entonces queda CANCELADA, aparece así en sus reservas y el historial registra la transición")
+        void clienteCancelaSuReserva() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            ClienteDePrueba cliente = clienteConDatos();
+            int idReserva = reservarYObtenerId(cliente.token(), proveedor.idServicio(), lunes("09:00"));
+
+            // Act
+            cancelar(cliente.token(), idReserva)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(idReserva))
+                    .andExpect(jsonPath("$.estado").value("CANCELADA"))
+                    .andExpect(jsonPath("$.fechaHoraInicio").value(lunes("09:00")));
+
+            // Assert
+            assertThat(estadoDe(idReserva)).isEqualTo("CANCELADA");
+            enviar(get(V1 + "/reservas/mias"), null, cliente.token())
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].id").value(idReserva))
+                    .andExpect(jsonPath("$[0].estado").value("CANCELADA"));
+            List<Map<String, Object>> historial = historialDe(idReserva);
+            assertThat(historial).hasSize(2);
+            assertThat(historial.get(1).get("anterior")).isEqualTo("CONFIRMADA");
+            assertThat(historial.get(1).get("nuevo")).isEqualTo("CANCELADA");
+            assertThat(historial.get(1).get("id_usuario")).isEqualTo(cliente.idUsuario());
+        }
+
+        @Test
+        @DisplayName("Dado una reserva en un servicio de un proveedor, cuando el proveedor dueño la cancela, entonces queda CANCELADA y el historial lo registra a él como autor")
+        void proveedorCancelaReservaDeSuServicio() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            int idReserva = reservarYObtenerId(clienteConSesion(), proveedor.idServicio(), lunes("09:00"));
+
+            // Act
+            cancelar(proveedor.token(), idReserva)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.estado").value("CANCELADA"));
+
+            // Assert
+            assertThat(estadoDe(idReserva)).isEqualTo("CANCELADA");
+            assertThat(historialDe(idReserva).get(1).get("id_usuario"))
+                    .isEqualTo(idUsuarioDe(proveedor.email(), jdbc));
+        }
+
+        @Test
+        @DisplayName("Dado un turno sin cupo, cuando su reserva se cancela, entonces el turno vuelve a estar disponible y otro cliente puede reservarlo")
+        void cancelarLiberaElCupo() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            ClienteDePrueba primero = clienteConDatos();
+            int idReserva = reservarYObtenerId(primero.token(), proveedor.idServicio(), lunes("09:00"));
+            String ruta = V1 + "/servicios/" + proveedor.idServicio() + "/disponibilidad";
+            mockMvc.perform(get(ruta).param("desde", PROXIMO_LUNES).param("hasta", PROXIMO_LUNES))
+                    .andExpect(jsonPath("$.turnos[*].fechaHoraInicio", not(hasItem(lunes("09:00")))));
+
+            // Act
+            cancelar(primero.token(), idReserva).andExpect(status().isOk());
+
+            // Assert
+            mockMvc.perform(get(ruta).param("desde", PROXIMO_LUNES).param("hasta", PROXIMO_LUNES))
+                    .andExpect(jsonPath("$.turnos[*].fechaHoraInicio", hasItem(lunes("09:00"))));
+            reservar(clienteConSesion(), proveedor.idServicio(), lunes("09:00")).andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("Dado un cliente con una reserva que bloquea otro servicio a la misma hora, cuando la cancela, entonces puede reservar ese otro servicio")
+        void cancelarLiberaAlCliente() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(
+                    List.of(servicio("Consulta", 30, 1), servicio("Terapia", 60, 1)));
+            ClienteDePrueba cliente = clienteConDatos();
+            int idReserva = reservarYObtenerId(cliente.token(), proveedor.idsServicios().get(0), lunes("10:00"));
+            reservar(cliente.token(), proveedor.idsServicios().get(1), lunes("10:00"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errorCode").value("RESERVA_SOLAPADA"));
+
+            // Act
+            cancelar(cliente.token(), idReserva).andExpect(status().isOk());
+
+            // Assert
+            reservar(cliente.token(), proveedor.idsServicios().get(1), lunes("10:00")).andExpect(status().isCreated());
+        }
+
+        @Test
+        @DisplayName("Dado un recurso ocupado por una reserva de otro servicio, cuando esa reserva se cancela, entonces el recurso queda libre para reservar")
+        void cancelarLiberaElRecurso() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(
+                    List.of(servicio("Limpieza", 30, 1), servicio("Blanqueamiento", 60, 1)));
+            int sala = crearRecurso(proveedor.token(), "Consultorio 1");
+            asignarRecursos(proveedor.token(), proveedor.idsServicios().get(0), List.of(sala));
+            asignarRecursos(proveedor.token(), proveedor.idsServicios().get(1), List.of(sala));
+            ClienteDePrueba primero = clienteConDatos();
+            String segundo = clienteConSesion();
+            int idReserva = reservarYObtenerId(primero.token(), proveedor.idsServicios().get(0), lunes("10:00"));
+            reservar(segundo, proveedor.idsServicios().get(1), lunes("10:00"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errorCode").value("RECURSO_NO_DISPONIBLE"));
+
+            // Act
+            cancelar(primero.token(), idReserva).andExpect(status().isOk());
+
+            // Assert
+            reservar(segundo, proveedor.idsServicios().get(1), lunes("10:00"))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.recursos[0].id").value(sala));
+        }
+
+        @Test
+        @DisplayName("Dado una reserva ajena, cuando otro cliente, otro proveedor o un anónimo intentan cancelarla, entonces reciben 403 o 401 y la reserva sigue CONFIRMADA")
+        void soloLosDuenosPuedenCancelar() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            int idReserva = reservarYObtenerId(clienteConSesion(), proveedor.idServicio(), lunes("09:00"));
+            ProveedorDePrueba otroProveedor = proveedorConServicios(List.of(servicio("Otro", 30, 1)));
+
+            // Act - Assert
+            cancelar(clienteConSesion(), idReserva)
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("ACCESO_DENEGADO"));
+            cancelar(otroProveedor.token(), idReserva)
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("ACCESO_DENEGADO"));
+            cancelar(null, idReserva)
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.errorCode").value("NO_AUTENTICADO"));
+            assertThat(estadoDe(idReserva)).isEqualTo("CONFIRMADA");
+            assertThat(historialDe(idReserva)).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Dado un id de reserva inexistente o no numérico, cuando se cancela, entonces recibe 404 RESERVA_NO_ENCONTRADA o 400 SOLICITUD_INVALIDA")
+        void reservaInexistente() throws Exception {
+            // Arrange
+            String token = clienteConSesion();
+
+            // Act - Assert
+            cancelar(token, 999999)
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.errorCode").value("RESERVA_NO_ENCONTRADA"));
+            cancelar(token, "abc")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("SOLICITUD_INVALIDA"));
+        }
+
+        @Test
+        @DisplayName("Dado una reserva ya cancelada, cuando se cancela de nuevo, entonces recibe 409 RESERVA_NO_CANCELABLE y el historial no se duplica")
+        void cancelarDosVeces() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            ClienteDePrueba cliente = clienteConDatos();
+            int idReserva = reservarYObtenerId(cliente.token(), proveedor.idServicio(), lunes("09:00"));
+            cancelar(cliente.token(), idReserva).andExpect(status().isOk());
+
+            // Act - Assert
+            cancelar(cliente.token(), idReserva)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errorCode").value("RESERVA_NO_CANCELABLE"));
+            assertThat(historialDe(idReserva)).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("Dado una reserva cuyo turno ya comenzó, cuando se cancela, entonces recibe 422 RESERVA_EN_EL_PASADO y sigue CONFIRMADA")
+        void reservaYaIniciada() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            ClienteDePrueba cliente = clienteConDatos();
+            int idReserva = reservarYObtenerId(cliente.token(), proveedor.idServicio(), lunes("10:00"));
+            reloj.avanzar(Duration.ofDays(7).plusHours(2).plusMinutes(30));
+            String tokenVigente = tokenDe(cliente.email());
+
+            // Act - Assert
+            cancelar(tokenVigente, idReserva)
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.errorCode").value("RESERVA_EN_EL_PASADO"));
+            assertThat(estadoDe(idReserva)).isEqualTo("CONFIRMADA");
+            assertThat(historialDe(idReserva)).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Dado el cliente y el proveedor que cancelan la misma reserva al mismo tiempo, cuando se procesan en paralelo, entonces solo uno la cancela y el historial registra un único cambio")
+        void cancelacionConcurrente() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            ClienteDePrueba cliente = clienteConDatos();
+            int idReserva = reservarYObtenerId(cliente.token(), proveedor.idServicio(), lunes("11:00"));
+            List<UsuarioAutenticado> usuarios = List.of(
+                    new UsuarioAutenticado(cliente.idUsuario(), Rol.CLIENTE),
+                    new UsuarioAutenticado(idUsuarioDe(proveedor.email(), jdbc), Rol.PROVEEDOR));
+            CountDownLatch salida = new CountDownLatch(1);
+            List<Callable<CodigoError>> tareas = usuarios.stream().<Callable<CodigoError>>map(usuario -> () -> {
+                salida.await();
+                try {
+                    cancelarReserva.cancelar(usuario, idReserva);
+                    return null;
+                } catch (ExcepcionNegocio e) {
+                    return e.getCodigo();
+                }
+            }).toList();
+
+            // Act
+            List<CodigoError> resultados = new ArrayList<>();
+            try (ExecutorService hilos = Executors.newFixedThreadPool(usuarios.size())) {
+                List<Future<CodigoError>> futuros = tareas.stream().map(hilos::submit).toList();
+                salida.countDown();
+                for (Future<CodigoError> futuro : futuros) {
+                    resultados.add(futuro.get());
+                }
+            }
+
+            // Assert
+            assertThat(resultados).containsOnlyOnce((CodigoError) null);
+            assertThat(resultados).filteredOn(codigo -> codigo != null).containsOnly(CodigoError.RESERVA_NO_CANCELABLE);
+            assertThat(estadoDe(idReserva)).isEqualTo("CANCELADA");
+            assertThat(historialDe(idReserva)).hasSize(2);
         }
     }
 

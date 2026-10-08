@@ -11,4 +11,9 @@ public record HistorialReserva(Integer id, Integer idReserva, EstadoReserva esta
     public static HistorialReserva creacion(Reserva reserva, Integer idUsuario, Instant ahora) {
         return new HistorialReserva(null, reserva.id(), null, reserva.estado(), idUsuario, ahora);
     }
+
+    public static HistorialReserva cambioDeEstado(EstadoReserva estadoAnterior, Reserva reserva, Integer idUsuario,
+                                                  Instant ahora) {
+        return new HistorialReserva(null, reserva.id(), estadoAnterior, reserva.estado(), idUsuario, ahora);
+    }
 }

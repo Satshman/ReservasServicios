@@ -3,6 +3,7 @@ package co.reservas.application.service.servicio;
 import co.reservas.application.port.in.auth.UsuarioAutenticado;
 import co.reservas.application.port.out.servicio.ServicioRepositoryPort;
 import co.reservas.application.port.out.usuario.UsuarioRepositoryPort;
+import co.reservas.domain.reserva.Reserva;
 import co.reservas.domain.servicio.Servicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
@@ -54,6 +55,26 @@ public class VerificadorPropiedad {
             throw accesoDenegado("El servicio no pertenece al proveedor autenticado.");
         }
         return new ServicioPropio(servicio, proveedor);
+    }
+
+    /**
+     * Regla ABAC de reservas: solo puede gestionar una reserva el cliente que la hizo o el proveedor dueño del
+     * servicio reservado (403 en cualquier otro caso, incluido el rol ADMIN, que no gestiona reservas).
+     */
+    public void exigirAccesoAReserva(UsuarioAutenticado usuario, Reserva reserva) {
+        boolean permitido = switch (usuario.rol()) {
+            case CLIENTE -> usuarios.buscarClientePorUsuario(usuario.idUsuario())
+                    .map(cliente -> cliente.id().equals(reserva.idCliente()))
+                    .orElse(false);
+            case PROVEEDOR -> usuarios.buscarProveedorPorUsuario(usuario.idUsuario())
+                    .flatMap(proveedor -> servicios.buscarPorId(reserva.idServicio())
+                            .map(servicio -> servicio.perteneceA(proveedor.id())))
+                    .orElse(false);
+            default -> false;
+        };
+        if (!permitido) {
+            throw accesoDenegado("La reserva no pertenece al usuario autenticado.");
+        }
     }
 
     public static ExcepcionNegocio servicioNoEncontrado() {

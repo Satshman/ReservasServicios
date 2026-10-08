@@ -3,7 +3,8 @@ FROM docker.io/library/eclipse-temurin:21-jdk-alpine AS construccion
 WORKDIR /fuente
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw -B -q dependency:go-offline
+#RUN chmod +x mvnw && ./mvnw -B -q dependency:go-offline
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw -B -q dependency:go-offline
 COPY src/ src/
 RUN ./mvnw -B -q package -DskipTests -Djacoco.skip=true \
     && cp target/reservas-servicios-*.jar /fuente/app.jar

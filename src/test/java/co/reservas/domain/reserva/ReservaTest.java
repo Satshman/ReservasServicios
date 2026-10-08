@@ -3,6 +3,7 @@ package co.reservas.domain.reserva;
 import co.reservas.domain.recurso.Recurso;
 import co.reservas.domain.servicio.EstadoServicio;
 import co.reservas.domain.servicio.Servicio;
+import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -70,5 +71,89 @@ class ReservaTest {
         assertThat(recurso.nombre()).isEqualTo("Sala 1");
         assertThat(recurso.perteneceA(3)).isTrue();
         assertThatThrownBy(() -> Recurso.nuevo(3, 1, " ")).isInstanceOf(ExcepcionNegocio.class);
+    }
+
+    private static Reserva reserva(EstadoReserva estado) {
+        return new Reserva(50, 2, 7, estado, INICIO, INICIO.plusSeconds(1800), AHORA, Set.of(1, 2));
+    }
+
+    private static void assertCancelarFalla(Reserva reserva, Instant ahora, CodigoError codigo) {
+        assertThatThrownBy(() -> reserva.cancelar(ahora))
+                .isInstanceOfSatisfying(ExcepcionNegocio.class, e -> assertThat(e.getCodigo()).isEqualTo(codigo));
+    }
+
+    @Test
+    @DisplayName("Dado una reserva confirmada que aún no comienza, cuando se cancela, entonces queda CANCELADA y conserva el resto de sus datos")
+    void cancelarReservaConfirmada() {
+        // Arrange
+        Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
+
+        // Act
+        Reserva cancelada = confirmada.cancelar(AHORA);
+
+        // Assert
+        assertThat(cancelada.estado()).isEqualTo(EstadoReserva.CANCELADA);
+        assertThat(cancelada.id()).isEqualTo(50);
+        assertThat(cancelada.idCliente()).isEqualTo(2);
+        assertThat(cancelada.idServicio()).isEqualTo(7);
+        assertThat(cancelada.fechaHoraInicio()).isEqualTo(INICIO);
+        assertThat(cancelada.fechaHoraFin()).isEqualTo(confirmada.fechaHoraFin());
+        assertThat(cancelada.creadoEn()).isEqualTo(AHORA);
+        assertThat(cancelada.idsRecursos()).containsExactlyInAnyOrder(1, 2);
+        assertThat(confirmada.estado()).isEqualTo(EstadoReserva.CONFIRMADA);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva que comienza en un segundo, cuando se cancela, entonces todavía se permite")
+    void cancelarJustoAntesDelInicio() {
+        // Arrange
+        Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
+
+        // Act
+        Reserva cancelada = confirmada.cancelar(INICIO.minusSeconds(1));
+
+        // Assert
+        assertThat(cancelada.estado()).isEqualTo(EstadoReserva.CANCELADA);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva ya cancelada o completada, cuando se cancela, entonces se rechaza con RESERVA_NO_CANCELABLE")
+    void cancelarReservaEnEstadoFinal() {
+        // Arrange
+        Reserva cancelada = reserva(EstadoReserva.CANCELADA);
+        Reserva completada = reserva(EstadoReserva.COMPLETADA);
+
+        // Act - Assert
+        assertCancelarFalla(cancelada, AHORA, CodigoError.RESERVA_NO_CANCELABLE);
+        assertCancelarFalla(completada, AHORA, CodigoError.RESERVA_NO_CANCELABLE);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva que ya comenzó o está por comenzar en este instante, cuando se cancela, entonces se rechaza con RESERVA_EN_EL_PASADO")
+    void cancelarReservaIniciada() {
+        // Arrange
+        Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
+
+        // Act - Assert
+        assertCancelarFalla(confirmada, INICIO, CodigoError.RESERVA_EN_EL_PASADO);
+        assertCancelarFalla(confirmada, INICIO.plusSeconds(600), CodigoError.RESERVA_EN_EL_PASADO);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva cancelada, cuando se calcula la transición, entonces el historial registra el estado anterior, el nuevo y quién la hizo")
+    void historialDeCancelacion() {
+        // Arrange
+        Reserva cancelada = reserva(EstadoReserva.CONFIRMADA).cancelar(AHORA);
+
+        // Act
+        HistorialReserva historial = HistorialReserva.cambioDeEstado(EstadoReserva.CONFIRMADA, cancelada, 30, AHORA);
+
+        // Assert
+        assertThat(historial.id()).isNull();
+        assertThat(historial.idReserva()).isEqualTo(50);
+        assertThat(historial.estadoAnterior()).isEqualTo(EstadoReserva.CONFIRMADA);
+        assertThat(historial.estadoNuevo()).isEqualTo(EstadoReserva.CANCELADA);
+        assertThat(historial.idUsuario()).isEqualTo(30);
+        assertThat(historial.fechaCambio()).isEqualTo(AHORA);
     }
 }
