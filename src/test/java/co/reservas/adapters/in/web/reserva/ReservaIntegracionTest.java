@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
@@ -310,7 +311,7 @@ class ReservaIntegracionTest extends PruebaIntegracion {
         }
     }
 
-     @Nested
+    @Nested
     @DisplayName("HU-08 - Cancelar reserva")
     class CancelarReserva {
 
@@ -493,6 +494,58 @@ class ReservaIntegracionTest extends PruebaIntegracion {
                     .andExpect(jsonPath("$.errorCode").value("RESERVA_EN_EL_PASADO"));
             assertThat(estadoDe(idReserva)).isEqualTo("CONFIRMADA");
             assertThat(historialDe(idReserva)).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Dado una reserva a la que le faltan menos de 5 días, cuando el cliente la cancela, entonces recibe 422 CANCELACION_FUERA_DE_PLAZO y sigue CONFIRMADA")
+        void clienteFueraDePlazo() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            ClienteDePrueba cliente = clienteConDatos();
+            int idReserva = reservarYObtenerId(cliente.token(), proveedor.idServicio(), lunes("09:00"));
+            reloj.avanzar(Duration.ofDays(3));
+            String tokenVigente = tokenDe(cliente.email());
+
+            // Act - Assert
+            cancelar(tokenVigente, idReserva)
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.errorCode").value("CANCELACION_FUERA_DE_PLAZO"))
+                    .andExpect(jsonPath("$.message").value(containsString("5 días")));
+            assertThat(estadoDe(idReserva)).isEqualTo("CONFIRMADA");
+            assertThat(historialDe(idReserva)).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Dado una reserva a la que le faltan exactamente 5 días, cuando el cliente la cancela, entonces se permite")
+        void clienteEnElLimiteDelPlazo() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            ClienteDePrueba cliente = clienteConDatos();
+            int idReserva = reservarYObtenerId(cliente.token(), proveedor.idServicio(), lunes("09:00"));
+            reloj.avanzar(Duration.ofDays(2).plusHours(1));
+            String tokenVigente = tokenDe(cliente.email());
+
+            // Act - Assert
+            cancelar(tokenVigente, idReserva)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.estado").value("CANCELADA"));
+            assertThat(estadoDe(idReserva)).isEqualTo("CANCELADA");
+        }
+
+        @Test
+        @DisplayName("Dado una reserva a la que le faltan menos de 5 días, cuando el proveedor dueño la cancela, entonces se permite porque la ventana solo aplica al cliente")
+        void proveedorSinPlazo() throws Exception {
+            // Arrange
+            ProveedorDePrueba proveedor = proveedorConAgenda(List.of(servicio("Consulta", 30, 1)));
+            int idReserva = reservarYObtenerId(clienteConSesion(), proveedor.idServicio(), lunes("09:00"));
+            reloj.avanzar(Duration.ofDays(3));
+            String tokenVigente = tokenDe(proveedor.email());
+
+            // Act - Assert
+            cancelar(tokenVigente, idReserva)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.estado").value("CANCELADA"));
+            assertThat(historialDe(idReserva)).hasSize(2);
         }
 
         @Test

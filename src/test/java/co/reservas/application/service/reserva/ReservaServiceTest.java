@@ -15,6 +15,7 @@ import co.reservas.domain.recurso.OcupacionRecurso;
 import co.reservas.domain.recurso.Recurso;
 import co.reservas.domain.reserva.EstadoReserva;
 import co.reservas.domain.reserva.HistorialReserva;
+import co.reservas.domain.reserva.PoliticaCancelacion;
 import co.reservas.domain.reserva.Reserva;
 import co.reservas.domain.servicio.EstadoServicio;
 import co.reservas.domain.servicio.Servicio;
@@ -81,7 +82,8 @@ class ReservaServiceTest {
     @BeforeEach
     void configurar() {
         servicio = new ReservaService(reservas, servicios, usuarios, agenda, recursos,
-                new CalculadoraDisponibilidad(reservas), verificador, Clock.fixed(AHORA, ZoneOffset.UTC));
+                new CalculadoraDisponibilidad(reservas), verificador, new PoliticaCancelacion(Duration.ofDays(5)),
+                Clock.fixed(AHORA, ZoneOffset.UTC));
         lenient().when(usuarios.bloquearClientePorUsuario(30)).thenReturn(Optional.of(new Cliente(8, 30)));
         lenient().when(servicios.bloquearPorId(7)).thenReturn(Optional.of(SERVICIO));
         lenient().when(usuarios.buscarProveedorPorId(3)).thenReturn(Optional.of(PROVEEDOR));

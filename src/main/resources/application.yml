@@ -56,6 +56,9 @@ app:
     login:
       max-intentos: ${LOGIN_MAX_ATTEMPTS:5}
       duracion-bloqueo: ${LOGIN_LOCK_DURATION:15m}
+  reservas:
+    cancelacion:
+      anticipacion-minima-cliente: ${CANCELACION_ANTICIPACION_MINIMA:5d}
 
 springdoc:
   api-docs:

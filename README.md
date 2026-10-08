@@ -13,7 +13,7 @@ Proyecto académico de CodeF@ctory UdeA 2026-2, perfil de equipo avanzado. El di
 | 1 | HU-04, HU-05, HU-06 | Crear, editar y eliminar bloques de agenda, con confirmación cuando afectan reservas |
 | 1 | HU-07 | Consultar disponibilidad y crear reservas |
 | 1 | HU-09 | Recursos compartidos entre servicios sin conflictos de uso |
-| 2 | HU-08 | Cancelar una reserva (cliente dueño o proveedor del servicio), liberando su cupo y sus recursos |
+| 2 | HU-08 | Cancelar una reserva (cliente dueño con al menos 5 días de anticipación, o proveedor del servicio), liberando su cupo y sus recursos |
 
 ## Tecnologías
 
@@ -94,7 +94,7 @@ Abra http://localhost:8081/swagger-ui.html con el stack de Compose en marcha.
 5. **HU-09**: `POST /recursos` (por ejemplo, "Consultorio 1") y `PUT /servicios/{idServicio}/recursos` con `{"idsRecursos":[id]}`.
 6. **HU-01 y HU-07**: registre y verifique un cliente (`rol: CLIENTE`), inicie sesión y autorice con su token. Consulte `GET /servicios/{idServicio}/disponibilidad?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` y reserve un turno con `POST /reservas`. Repetir el mismo turno con otro cliente produce `409 TURNO_SIN_CUPO` con sugerencias; una hora fuera de la agenda produce `422 HORARIO_NO_DISPONIBLE`.
 7. **HU-05 y HU-06**: con el token del proveedor, `PUT /horarios/{id}` reduciendo el bloque para que excluya la reserva devuelve `409 HORARIO_CON_RESERVAS`; repita con `confirmar=true` para aplicarlo. `DELETE /horarios/{id}` funciona igual.
-8. **HU-08**: con el token del cliente que hizo la reserva (o del proveedor dueño del servicio), `POST /reservas/{idReserva}/cancelacion` sin cuerpo devuelve la reserva en estado `CANCELADA`, y el turno vuelve a aparecer en `GET /servicios/{idServicio}/disponibilidad`. Cancelarla de nuevo produce `409 RESERVA_NO_CANCELABLE`; otro cliente recibe `403 ACCESO_DENEGADO`; una reserva que ya comenzó produce `422 RESERVA_EN_EL_PASADO`; un id inexistente, `404 RESERVA_NO_ENCONTRADA`. Cada cancelación queda en `tbl_historial_reservas` con el estado anterior y el usuario que la hizo.
+8. **HU-08**: con el token del cliente que hizo la reserva (o del proveedor dueño del servicio), `POST /reservas/{idReserva}/cancelacion` sin cuerpo devuelve la reserva en estado `CANCELADA`, y el turno vuelve a aparecer en `GET /servicios/{idServicio}/disponibilidad`. Cancelarla de nuevo produce `409 RESERVA_NO_CANCELABLE`; otro cliente recibe `403 ACCESO_DENEGADO`; una reserva que ya comenzó produce `422 RESERVA_EN_EL_PASADO`; si el cliente cancela cuando faltan menos de 5 días, recibe `422 CANCELACION_FUERA_DE_PLAZO` (el proveedor no tiene esa restricción); un id inexistente, `404 RESERVA_NO_ENCONTRADA`. Cada cancelación queda en `tbl_historial_reservas` con el estado anterior y el usuario que la hizo.
 9. Cinco contraseñas incorrectas seguidas bloquean la cuenta 15 minutos (`423 CUENTA_BLOQUEADA` aunque la contraseña sea correcta).
 
 ## Configuración
@@ -109,4 +109,5 @@ Abra http://localhost:8081/swagger-ui.html con el stack de Compose en marcha.
 | `APP_BASE_URL` | Base del enlace de verificación | obligatoria |
 | `APP_CORS_ALLOWED_ORIGINS` | Orígenes permitidos, separados por coma | ninguno |
 | `LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCK_DURATION` | Política de bloqueo | `5`, `15m` |
+| `CANCELACION_ANTICIPACION_MINIMA` | Anticipación mínima con la que un cliente puede cancelar (`5d`, `48h`, `90m`…) | `5d` |
 | `PORT`, `SWAGGER_ENABLED` | Puerto HTTP y publicación de Swagger | `8080`, `true` |

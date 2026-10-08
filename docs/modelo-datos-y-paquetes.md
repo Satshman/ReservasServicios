@@ -355,7 +355,7 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
 | 404 | `SERVICIO_NO_ENCONTRADO`, `HORARIO_NO_ENCONTRADO`, `RECURSO_NO_ENCONTRADO`, `CATEGORIA_NO_ENCONTRADA`, `TIPO_RECURSO_NO_ENCONTRADO`, `RESERVA_NO_ENCONTRADA`, `RUTA_NO_ENCONTRADA` |
 | 405 | `METODO_NO_PERMITIDO` |
 | 409 | `EMAIL_YA_REGISTRADO`, `SERVICIO_YA_REGISTRADO`, `RECURSO_YA_REGISTRADO`, `HORARIO_SOLAPADO`, `HORARIO_CON_RESERVAS`, `TURNO_SIN_CUPO`, `RECURSO_NO_DISPONIBLE`, `RESERVA_SOLAPADA`, `RESERVA_NO_CANCELABLE` |
-| 422 | `RESERVA_EN_EL_PASADO`, `HORARIO_NO_DISPONIBLE`, `SERVICIO_NO_DISPONIBLE`, `BLOQUE_MENOR_A_DURACION` |
+| 422 | `RESERVA_EN_EL_PASADO`, `CANCELACION_FUERA_DE_PLAZO`, `HORARIO_NO_DISPONIBLE`, `SERVICIO_NO_DISPONIBLE`, `BLOQUE_MENOR_A_DURACION` |
 | 423 | `CUENTA_BLOQUEADA` |
 | 500 | `ERROR_INTERNO` (sin detalles internos) |
 
@@ -415,6 +415,7 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
   2. Propiedad (ABAC): solo el cliente que hizo la reserva o el proveedor dueño del servicio; cualquier otro usuario, incluido `ADMIN` → `403 ACCESO_DENEGADO`.
   3. Estado: `CANCELADA` o `COMPLETADA` → `409 RESERVA_NO_CANCELABLE`.
   4. Tiempo: la reserva ya comenzó (`fechaHoraInicio <= ahora`) → `422 RESERVA_EN_EL_PASADO`.
+  5. Ventana mínima, **solo para el cliente**: faltan menos de 5 días para el inicio (`fechaHoraInicio < ahora + 5 días`) → `422 CANCELACION_FUERA_DE_PLAZO`. Con exactamente 5 días todavía se permite. El proveedor dueño puede cancelar hasta que la reserva comience (por ejemplo, si el profesional no puede atender). La regla vive en `PoliticaCancelacion` (dominio) y el plazo se configura con `CANCELACION_ANTICIPACION_MINIMA` (por defecto `5d`).
 - La reserva pasa a `CANCELADA` y se agrega una fila de historial con el estado anterior y el usuario que canceló. Como la disponibilidad, el cupo y los conflictos de recursos solo cuentan reservas `CONFIRMADA`, el turno y sus recursos quedan libres sin borrar filas de `tbl_reservas_recursos`.
 - Se registra el evento `RESERVA_CANCELADA` (id de reserva, servicio, usuario y rol). Respuesta `200` con la reserva actualizada.
 

@@ -4,6 +4,7 @@ import co.reservas.domain.servicio.Servicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
@@ -46,7 +47,11 @@ public record Reserva(
                 idsRecursos);
     }
 
-    public Reserva cancelar(Instant ahora) {
+    /**
+     * Cancela la reserva si sigue CONFIRMADA, no ha comenzado y faltan al menos {@code anticipacionMinima} para su
+     * inicio. Con exactamente esa anticipación todavía se permite.
+     */
+    public Reserva cancelar(Instant ahora, Duration anticipacionMinima) {
         if (estado == EstadoReserva.CANCELADA) {
             throw new ExcepcionNegocio(CodigoError.RESERVA_NO_CANCELABLE, "La reserva ya está cancelada.");
         }
@@ -58,7 +63,21 @@ public record Reserva(
             throw new ExcepcionNegocio(CodigoError.RESERVA_EN_EL_PASADO,
                     "No se puede cancelar una reserva que ya comenzó.");
         }
+        if (fechaHoraInicio.isBefore(ahora.plus(anticipacionMinima))) {
+            throw new ExcepcionNegocio(CodigoError.CANCELACION_FUERA_DE_PLAZO,
+                    "Solo se puede cancelar con al menos " + describir(anticipacionMinima) + " de anticipación.");
+        }
         return new Reserva(id, idCliente, idServicio, EstadoReserva.CANCELADA, fechaHoraInicio, fechaHoraFin,
                 creadoEn, idsRecursos);
+    }
+
+    private static String describir(Duration duracion) {
+        if (duracion.equals(Duration.ofDays(duracion.toDays()))) {
+            return duracion.toDays() == 1 ? "1 día" : duracion.toDays() + " días";
+        }
+        if (duracion.equals(Duration.ofHours(duracion.toHours()))) {
+            return duracion.toHours() == 1 ? "1 hora" : duracion.toHours() + " horas";
+        }
+        return duracion.toMinutes() + " minutos";
     }
 }

@@ -11,6 +11,7 @@ import co.reservas.application.service.servicio.VerificadorPropiedad;
 import co.reservas.domain.recurso.Recurso;
 import co.reservas.domain.reserva.EstadoReserva;
 import co.reservas.domain.reserva.HistorialReserva;
+import co.reservas.domain.reserva.PoliticaCancelacion;
 import co.reservas.domain.reserva.Reserva;
 import co.reservas.domain.servicio.EstadoServicio;
 import co.reservas.domain.servicio.Servicio;
@@ -76,7 +77,8 @@ class ReservaServiceCancelacionTest {
     @BeforeEach
     void configurar() {
         servicio = new ReservaService(reservas, servicios, usuarios, agenda, recursos,
-                new CalculadoraDisponibilidad(reservas), verificador, Clock.fixed(AHORA, ZoneOffset.UTC));
+                new CalculadoraDisponibilidad(reservas), verificador, new PoliticaCancelacion(Duration.ofDays(5)),
+                Clock.fixed(AHORA, ZoneOffset.UTC));
     }
 
     private static Reserva reserva(EstadoReserva estado, Instant inicio) {
@@ -190,6 +192,33 @@ class ReservaServiceCancelacionTest {
 
         // Act - Assert
         assertCancelarFalla(CLIENTE, CodigoError.RESERVA_EN_EL_PASADO);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva que comienza en 4 días, cuando el cliente la cancela, entonces responde CANCELACION_FUERA_DE_PLAZO sin modificar nada")
+    void clienteFueraDePlazo() {
+        // Arrange
+        when(reservas.bloquearPorId(5))
+                .thenReturn(Optional.of(reserva(EstadoReserva.CONFIRMADA, AHORA.plus(Duration.ofDays(4)))));
+
+        // Act - Assert
+        assertCancelarFalla(CLIENTE, CodigoError.CANCELACION_FUERA_DE_PLAZO);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva que comienza en 4 días, cuando el proveedor dueño la cancela, entonces se permite porque la ventana solo aplica al cliente")
+    void proveedorSinVentana() {
+        // Arrange
+        Reserva proxima = reserva(EstadoReserva.CONFIRMADA, AHORA.plus(Duration.ofDays(4)));
+        when(reservas.bloquearPorId(5)).thenReturn(Optional.of(proxima));
+        stubMapeo();
+
+        // Act
+        ReservaResultado resultado = servicio.cancelar(DUENO, 5);
+
+        // Assert
+        assertThat(resultado.estado()).isEqualTo(EstadoReserva.CANCELADA);
+        verify(reservas).actualizarEstado(any());
     }
 }
 

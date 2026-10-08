@@ -78,7 +78,9 @@ public class ReservaController {
     @Operation(summary = "Cancelar una reserva (CLIENTE dueño o PROVEEDOR dueño del servicio)",
             description = "La reserva pasa a CANCELADA, libera su cupo y sus recursos y queda registrada en el "
                     + "historial. Errores: 403 ACCESO_DENEGADO, 404 RESERVA_NO_ENCONTRADA, 409 RESERVA_NO_CANCELABLE "
-                    + "(ya cancelada o completada), 422 RESERVA_EN_EL_PASADO (la reserva ya comenzó).")
+                    + "(ya cancelada o completada), 422 RESERVA_EN_EL_PASADO (la reserva ya comenzó), "
+                    + "422 CANCELACION_FUERA_DE_PLAZO (el cliente cancela con menos de la anticipación mínima, "
+                    + "5 días por defecto; el proveedor no tiene esta restricción).")
     public ReservaResultado cancelar(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
                                      @PathVariable Integer idReserva) {
         return cancelarReserva.cancelar(SesionActual.de(jwt), idReserva);

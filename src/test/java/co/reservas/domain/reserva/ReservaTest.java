@@ -19,6 +19,8 @@ class ReservaTest {
 
     private static final Instant AHORA = Instant.parse("2026-10-05T13:00:00Z");
     private static final Instant INICIO = Instant.parse("2026-10-12T15:00:00Z");
+    private static final Duration SIN_VENTANA = Duration.ZERO;
+    private static final Duration CINCO_DIAS = Duration.ofDays(5);
 
     @Test
     @DisplayName("Dado un servicio de 45 minutos, cuando se crea la reserva, entonces queda CONFIRMADA y termina 45 minutos después")
@@ -78,7 +80,11 @@ class ReservaTest {
     }
 
     private static void assertCancelarFalla(Reserva reserva, Instant ahora, CodigoError codigo) {
-        assertThatThrownBy(() -> reserva.cancelar(ahora))
+        assertCancelarFalla(reserva, ahora, SIN_VENTANA, codigo);
+    }
+
+    private static void assertCancelarFalla(Reserva reserva, Instant ahora, Duration ventana, CodigoError codigo) {
+        assertThatThrownBy(() -> reserva.cancelar(ahora, ventana))
                 .isInstanceOfSatisfying(ExcepcionNegocio.class, e -> assertThat(e.getCodigo()).isEqualTo(codigo));
     }
 
@@ -89,7 +95,7 @@ class ReservaTest {
         Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
 
         // Act
-        Reserva cancelada = confirmada.cancelar(AHORA);
+        Reserva cancelada = confirmada.cancelar(AHORA, CINCO_DIAS);
 
         // Assert
         assertThat(cancelada.estado()).isEqualTo(EstadoReserva.CANCELADA);
@@ -104,13 +110,13 @@ class ReservaTest {
     }
 
     @Test
-    @DisplayName("Dado una reserva que comienza en un segundo, cuando se cancela, entonces todavía se permite")
+    @DisplayName("Dado una reserva que comienza en un segundo y sin ventana mínima, cuando se cancela, entonces todavía se permite")
     void cancelarJustoAntesDelInicio() {
         // Arrange
         Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
 
         // Act
-        Reserva cancelada = confirmada.cancelar(INICIO.minusSeconds(1));
+        Reserva cancelada = confirmada.cancelar(INICIO.minusSeconds(1), SIN_VENTANA);
 
         // Assert
         assertThat(cancelada.estado()).isEqualTo(EstadoReserva.CANCELADA);
@@ -137,13 +143,54 @@ class ReservaTest {
         // Act - Assert
         assertCancelarFalla(confirmada, INICIO, CodigoError.RESERVA_EN_EL_PASADO);
         assertCancelarFalla(confirmada, INICIO.plusSeconds(600), CodigoError.RESERVA_EN_EL_PASADO);
+        assertCancelarFalla(confirmada, INICIO, CINCO_DIAS, CodigoError.RESERVA_EN_EL_PASADO);
+    }
+
+    @Test
+    @DisplayName("Dado una ventana mínima de 5 días, cuando se cancela con exactamente 5 días de anticipación, entonces se permite")
+    void cancelarEnElLimiteDeLaVentana() {
+        // Arrange
+        Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
+
+        // Act
+        Reserva cancelada = confirmada.cancelar(INICIO.minus(CINCO_DIAS), CINCO_DIAS);
+
+        // Assert
+        assertThat(cancelada.estado()).isEqualTo(EstadoReserva.CANCELADA);
+    }
+
+    @Test
+    @DisplayName("Dado una ventana mínima de 5 días, cuando faltan menos de 5 días para la reserva, entonces se rechaza con CANCELACION_FUERA_DE_PLAZO")
+    void cancelarDentroDeLaVentana() {
+        // Arrange
+        Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
+
+        // Act - Assert
+        assertCancelarFalla(confirmada, INICIO.minus(CINCO_DIAS).plusSeconds(1), CINCO_DIAS,
+                CodigoError.CANCELACION_FUERA_DE_PLAZO);
+        assertCancelarFalla(confirmada, INICIO.minusSeconds(1), CINCO_DIAS, CodigoError.CANCELACION_FUERA_DE_PLAZO);
+    }
+
+    @Test
+    @DisplayName("Dado distintas ventanas mínimas, cuando la cancelación se rechaza, entonces el mensaje indica la anticipación exigida")
+    void mensajeDeLaVentana() {
+        // Arrange
+        Reserva confirmada = reserva(EstadoReserva.CONFIRMADA);
+        Instant ahora = INICIO.minusSeconds(60);
+
+        // Act - Assert
+        assertThatThrownBy(() -> confirmada.cancelar(ahora, CINCO_DIAS)).hasMessageContaining("5 días");
+        assertThatThrownBy(() -> confirmada.cancelar(ahora, Duration.ofDays(1))).hasMessageContaining("1 día ");
+        assertThatThrownBy(() -> confirmada.cancelar(ahora, Duration.ofHours(36))).hasMessageContaining("36 horas");
+        assertThatThrownBy(() -> confirmada.cancelar(ahora, Duration.ofHours(1))).hasMessageContaining("1 hora ");
+        assertThatThrownBy(() -> confirmada.cancelar(ahora, Duration.ofMinutes(90))).hasMessageContaining("90 minutos");
     }
 
     @Test
     @DisplayName("Dado una reserva cancelada, cuando se calcula la transición, entonces el historial registra el estado anterior, el nuevo y quién la hizo")
     void historialDeCancelacion() {
         // Arrange
-        Reserva cancelada = reserva(EstadoReserva.CONFIRMADA).cancelar(AHORA);
+        Reserva cancelada = reserva(EstadoReserva.CONFIRMADA).cancelar(AHORA, CINCO_DIAS);
 
         // Act
         HistorialReserva historial = HistorialReserva.cambioDeEstado(EstadoReserva.CONFIRMADA, cancelada, 30, AHORA);
