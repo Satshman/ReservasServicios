@@ -1,6 +1,6 @@
 # Modelo de datos y paquetes — Sprints 1 y 2
 
-Diseño aprobado para implementar las HU-01 a HU-07 y HU-09 (Sprint 1) y la HU-08 (Sprint 2). Consolida el esquema físico de PostgreSQL, la estructura de paquetes hexagonal y el contrato de la API. **Reemplaza a `docs/db.md` y al diagrama `paquetes_&_componentes`** como fuente de verdad; esos diagramas deben actualizarse a partir de este documento.
+Diseño aprobado para implementar las HU-01 a HU-07 y HU-09 (Sprint 1) y las HU-08 y HU-15 (Sprint 2). Consolida el esquema físico de PostgreSQL, la estructura de paquetes hexagonal y el contrato de la API. **Reemplaza a `docs/db.md` y al diagrama `paquetes_&_componentes`** como fuente de verdad; esos diagramas deben actualizarse a partir de este documento.
 
 La plataforma es **agnóstica al negocio**: cualquier establecimiento (clínica, peluquería, gimnasio, academia) se registra como proveedor y configura sus propios servicios, agenda y recursos.
 
@@ -324,7 +324,8 @@ Todos bajo `/api/v1`.
 | HU-07 | `ConsultarDisponibilidadUseCase` | `GET /servicios/{idServicio}/disponibilidad?desde=&hasta=` | Público |
 | HU-07, HU-09 | `CrearReservaUseCase` | `POST /reservas` | CLIENTE |
 | HU-07 | `ConsultarReservasUseCase` | `GET /reservas/mias` · `GET /servicios/{idServicio}/reservas` | CLIENTE · PROVEEDOR dueño |
-| HU-08 (Sprint 2) | `CancelarReservaUseCase` | `POST /reservas/{idReserva}/cancelacion` | CLIENTE dueño · PROVEEDOR dueño del servicio |
+| HU-08 (Sprint 2) | `CancelarReservaUseCase` | `POST /reservas/{idReserva}/cancelacion` | CLIENTE dueño |
+| HU-15 (Sprint 2) | `CancelarReservaUseCase` | `POST /reservas/{idReserva}/cancelacion` (mismo endpoint) | PROVEEDOR dueño del servicio |
 | HU-09 | `GestionarRecursosUseCase` | `POST /recursos` · `GET /recursos` · `PUT /servicios/{idServicio}/recursos` | PROVEEDOR |
 | Soporte | `GestionarServiciosUseCase` | `POST /servicios` (PROVEEDOR) · `GET /servicios` · `GET /servicios/{id}` (públicos) | — |
 | Soporte | `ConsultarCatalogosUseCase` | `GET /catalogos/categorias` · `/tipos-recurso` · `/tipos-documento` | Público |
@@ -419,6 +420,13 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
 - La reserva pasa a `CANCELADA` y se agrega una fila de historial con el estado anterior y el usuario que canceló. Como la disponibilidad, el cupo y los conflictos de recursos solo cuentan reservas `CONFIRMADA`, el turno y sus recursos quedan libres sin borrar filas de `tbl_reservas_recursos`.
 - Se registra el evento `RESERVA_CANCELADA` (id de reserva, servicio, usuario y rol). Respuesta `200` con la reserva actualizada.
 
+### HU-15 — Cancelar reserva como proveedor (Sprint 2)
+- Mismo caso de uso y endpoint que HU-08: la operación es idéntica y solo cambia quién la ejecuta, que se distingue por el rol del token. No se duplica lógica ni se crea otra ruta.
+- Permite al proveedor cancelar reservas de clientes en **sus propios servicios** ante situaciones que le impiden atender (falta de personal, de recursos o indisponibilidad).
+- Reglas: las mismas validaciones 1 a 4 de HU-08. **No aplica la ventana mínima** de 5 días (validación 5), así que el proveedor puede cancelar hasta que la reserva comience.
+- Un proveedor que no es dueño del servicio reservado → `403 ACCESO_DENEGADO`.
+- Efecto: la reserva queda `CANCELADA` (visible para el proveedor en `GET /servicios/{idServicio}/reservas` y para el cliente en `GET /reservas/mias`), se liberan su cupo y sus recursos, y el historial registra al proveedor como autor del cambio.
+
 ### HU-09 — Controlar disponibilidad de recursos
 - La reserva ocupa **todos** los recursos activos asociados al servicio.
 - Los recursos se bloquean `FOR UPDATE` en orden de id (evita deadlocks).
@@ -432,7 +440,7 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
 
 | Tema | Estado |
 |------|--------|
-| Cancelar reserva (HU-08) | Implementada en el Sprint 2 |
+| Cancelar reserva por el cliente (HU-08) y por el proveedor (HU-15) | Implementadas en el Sprint 2 |
 | Reportes de ocupación | Pendiente |
 | MFA para administradores, refresh tokens y revocación | Sprint 3 ("aseguramiento mediante tokens") |
 | Endpoints de excepciones de disponibilidad | Solo existe la tabla |

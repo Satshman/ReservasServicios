@@ -31,7 +31,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping(ApiRutas.V1)
-@Tag(name = "Reservas", description = "Disponibilidad, reservas y cancelación de turnos (HU-07, HU-08, HU-09)")
+@Tag(name = "Reservas", description = "Disponibilidad, reservas y cancelación de turnos (HU-07, HU-08, HU-09, HU-15)")
 public class ReservaController {
 
     private final CrearReservaUseCase crearReserva;
@@ -76,7 +76,8 @@ public class ReservaController {
     @PostMapping("/reservas/{idReserva}/cancelacion")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Cancelar una reserva (CLIENTE dueño o PROVEEDOR dueño del servicio)",
-            description = "La reserva pasa a CANCELADA, libera su cupo y sus recursos y queda registrada en el "
+            description = "HU-08 (cliente) y HU-15 (proveedor, por ejemplo por falta de personal o recursos). "
+                    + "La reserva pasa a CANCELADA, libera su cupo y sus recursos y queda registrada en el "
                     + "historial. Errores: 403 ACCESO_DENEGADO, 404 RESERVA_NO_ENCONTRADA, 409 RESERVA_NO_CANCELABLE "
                     + "(ya cancelada o completada), 422 RESERVA_EN_EL_PASADO (la reserva ya comenzó), "
                     + "422 CANCELACION_FUERA_DE_PLAZO (el cliente cancela con menos de la anticipación mínima, "
