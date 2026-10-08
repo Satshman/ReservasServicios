@@ -19,6 +19,11 @@ public interface RecursoRepositoryPort {
     List<Recurso> listarActivosPorServicio(Integer idServicio);
 
     /**
+     * Recursos asignados al servicio, activos o no.
+     */
+    List<Recurso> listarAsignadosAServicio(Integer idServicio);
+
+    /**
      * Bloquea ({@code FOR UPDATE}) los recursos activos del servicio en orden de id para evitar interbloqueos.
      */
     List<Recurso> bloquearActivosPorServicio(Integer idServicio);

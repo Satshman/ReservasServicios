@@ -184,6 +184,43 @@ class ReservaServiceCancelacionTest {
     }
 
     @Test
+    @DisplayName("Dado una reserva completada, cuando el cliente o el proveedor la cancelan, entonces responde RESERVA_NO_CANCELABLE sin modificar nada")
+    void reservaCompletada() {
+        // Arrange
+        when(reservas.bloquearPorId(5)).thenReturn(Optional.of(reserva(EstadoReserva.COMPLETADA, INICIO)));
+
+        // Act - Assert
+        assertCancelarFalla(CLIENTE, CodigoError.RESERVA_NO_CANCELABLE);
+        assertCancelarFalla(DUENO, CodigoError.RESERVA_NO_CANCELABLE);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva que ya comenzó, cuando el proveedor dueño la cancela, entonces responde RESERVA_EN_EL_PASADO porque sin ventana igual debe cancelar antes del inicio")
+    void proveedorReservaYaIniciada() {
+        // Arrange
+        when(reservas.bloquearPorId(5)).thenReturn(Optional.of(reserva(EstadoReserva.CONFIRMADA, AHORA)));
+
+        // Act - Assert
+        assertCancelarFalla(DUENO, CodigoError.RESERVA_EN_EL_PASADO);
+    }
+
+    @Test
+    @DisplayName("Dado una reserva que comienza en exactamente 5 días, cuando el cliente la cancela, entonces se permite")
+    void clienteEnElLimiteDelPlazo() {
+        // Arrange
+        when(reservas.bloquearPorId(5))
+                .thenReturn(Optional.of(reserva(EstadoReserva.CONFIRMADA, AHORA.plus(Duration.ofDays(5)))));
+        stubMapeo();
+
+        // Act
+        ReservaResultado resultado = servicio.cancelar(CLIENTE, 5);
+
+        // Assert
+        assertThat(resultado.estado()).isEqualTo(EstadoReserva.CANCELADA);
+        verify(reservas).registrarHistorial(any());
+    }
+
+    @Test
     @DisplayName("Dado una reserva que ya comenzó, cuando se cancela, entonces responde RESERVA_EN_EL_PASADO sin modificar nada")
     void reservaYaIniciada() {
         // Arrange

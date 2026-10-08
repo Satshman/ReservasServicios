@@ -60,17 +60,22 @@ public class SecurityConfig {
                                 V1 + "/auth/verificacion/reenvio").permitAll()
                         .requestMatchers(HttpMethod.GET, V1 + "/auth/verificacion").permitAll()
                         .requestMatchers(HttpMethod.GET, V1 + "/catalogos/*").permitAll()
+                        // Antes de la regla pública de /servicios/*, que también coincide con /servicios/historial
+                        .requestMatchers(HttpMethod.GET, V1 + "/servicios/historial").hasRole(PROVEEDOR)
                         .requestMatchers(HttpMethod.GET, V1 + "/servicios", V1 + "/servicios/*",
                                 V1 + "/servicios/*/horarios", V1 + "/servicios/*/disponibilidad").permitAll()
                         .requestMatchers(HttpMethod.POST, V1 + "/servicios", V1 + "/servicios/*/horarios",
                                 V1 + "/recursos").hasRole(PROVEEDOR)
-                        .requestMatchers(HttpMethod.PUT, V1 + "/horarios/*", V1 + "/servicios/*/recursos")
+                        .requestMatchers(HttpMethod.PUT, V1 + "/horarios/*", V1 + "/servicios/*/recursos",
+                                V1 + "/servicios/*/estado")
                         .hasRole(PROVEEDOR)
                         .requestMatchers(HttpMethod.DELETE, V1 + "/horarios/*").hasRole(PROVEEDOR)
                         .requestMatchers(HttpMethod.GET, V1 + "/recursos", V1 + "/servicios/*/reservas")
                         .hasRole(PROVEEDOR)
                         .requestMatchers(HttpMethod.POST, V1 + "/reservas").hasRole(CLIENTE)
                         .requestMatchers(HttpMethod.GET, V1 + "/reservas/mias").hasRole(CLIENTE)
+                        .requestMatchers(HttpMethod.GET, V1 + "/reservas/historial", V1 + "/reservas/*/historial")
+                        .hasAnyRole(CLIENTE, PROVEEDOR)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(servidor -> servidor
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(convertidorAutenticacion()))

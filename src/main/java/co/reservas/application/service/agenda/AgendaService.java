@@ -18,6 +18,7 @@ import co.reservas.application.service.servicio.VerificadorPropiedad;
 import co.reservas.domain.agenda.DetectorReservasAfectadas;
 import co.reservas.domain.agenda.HorarioDisponible;
 import co.reservas.domain.reserva.Reserva;
+import co.reservas.domain.servicio.HistorialServicio;
 import co.reservas.domain.servicio.Servicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
@@ -67,7 +68,11 @@ public class AgendaService implements CrearHorarioUseCase, ConsultarHorariosUseC
         nuevos.forEach(horario -> horario.validarCubreDuracion(servicio.duracion()));
         HorarioDisponible.validarSinSolapes(nuevos, agenda.listarPorServicio(idServicio));
 
-        List<HorarioResultado> creados = agenda.guardarTodos(nuevos).stream().map(AgendaService::mapear).toList();
+        List<HorarioDisponible> guardados = agenda.guardarTodos(nuevos);
+        Instant ahora = Instant.now(clock);
+        guardados.forEach(horario -> servicios.registrarHistorial(
+                HistorialServicio.horarioCreado(idServicio, horario.descripcion(), usuario.idUsuario(), ahora)));
+        List<HorarioResultado> creados = guardados.stream().map(AgendaService::mapear).toList();
         log.atInfo()
                 .addKeyValue("evento", "HORARIOS_CREADOS")
                 .addKeyValue("idServicio", idServicio)
@@ -107,6 +112,8 @@ public class AgendaService implements CrearHorarioUseCase, ConsultarHorariosUseC
         exigirConfirmacion(afectadas, confirmar, zona);
 
         HorarioResultado guardado = mapear(agenda.guardar(nuevo));
+        servicios.registrarHistorial(HistorialServicio.horarioEditado(original.idServicio(), original.descripcion(),
+                nuevo.descripcion(), usuario.idUsuario(), ahora));
         registrarCambio("HORARIO_EDITADO", usuario, idHorario, afectadas.size());
         return new CambioHorarioResultado(guardado, mapearAfectadas(afectadas, zona));
     }
@@ -124,6 +131,8 @@ public class AgendaService implements CrearHorarioUseCase, ConsultarHorariosUseC
         exigirConfirmacion(afectadas, confirmar, zona);
 
         agenda.eliminar(idHorario);
+        servicios.registrarHistorial(HistorialServicio.horarioEliminado(original.idServicio(),
+                original.descripcion(), usuario.idUsuario(), ahora));
         registrarCambio("HORARIO_ELIMINADO", usuario, idHorario, afectadas.size());
         return new CambioHorarioResultado(null, mapearAfectadas(afectadas, zona));
     }

@@ -4,7 +4,9 @@ import co.reservas.adapters.out.persistence.CatalogoSistema;
 import co.reservas.adapters.out.persistence.RestriccionesUnicas;
 import co.reservas.application.port.out.servicio.ServicioRepositoryPort;
 import co.reservas.domain.servicio.EstadoServicio;
+import co.reservas.domain.servicio.HistorialServicio;
 import co.reservas.domain.servicio.Servicio;
+import co.reservas.domain.servicio.TipoCambioServicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import org.springframework.stereotype.Component;
@@ -17,10 +19,13 @@ import java.util.Optional;
 public class ServicioRepositoryJpaAdapter implements ServicioRepositoryPort {
 
     private final ServicioJpaRepository servicios;
+    private final HistorialServicioJpaRepository historial;
     private final CatalogoSistema catalogo;
 
-    public ServicioRepositoryJpaAdapter(ServicioJpaRepository servicios, CatalogoSistema catalogo) {
+    public ServicioRepositoryJpaAdapter(ServicioJpaRepository servicios, HistorialServicioJpaRepository historial,
+                                        CatalogoSistema catalogo) {
         this.servicios = servicios;
+        this.historial = historial;
         this.catalogo = catalogo;
     }
 
@@ -62,6 +67,29 @@ public class ServicioRepositoryJpaAdapter implements ServicioRepositoryPort {
     @Override
     public boolean existeNombre(Integer idProveedor, String nombre) {
         return servicios.existsByIdProveedorAndNombre(idProveedor, nombre);
+    }
+
+    @Override
+    public List<Servicio> listarPorProveedor(Integer idProveedor) {
+        return servicios.findByIdProveedorOrderByIdAsc(idProveedor).stream().map(this::aDominio).toList();
+    }
+
+    @Override
+    public void registrarHistorial(HistorialServicio cambio) {
+        historial.save(new HistorialServicioEntity(cambio.idServicio(), cambio.tipoCambio().name(),
+                cambio.valorAnterior(), cambio.valorNuevo(), cambio.idUsuario(), cambio.fechaCambio()));
+    }
+
+    @Override
+    public List<HistorialServicio> listarHistorial(Collection<Integer> idsServicios) {
+        if (idsServicios.isEmpty()) {
+            return List.of();
+        }
+        return historial.findByIdServicioInOrderByFechaCambioAscIdAsc(idsServicios).stream()
+                .map(entidad -> new HistorialServicio(entidad.getId(), entidad.getIdServicio(),
+                        TipoCambioServicio.valueOf(entidad.getTipoCambio()), entidad.getValorAnterior(),
+                        entidad.getValorNuevo(), entidad.getIdUsuario(), entidad.getFechaCambio()))
+                .toList();
     }
 
     private Servicio aDominio(ServicioEntity entidad) {

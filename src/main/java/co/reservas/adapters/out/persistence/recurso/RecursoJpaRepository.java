@@ -21,6 +21,10 @@ public interface RecursoJpaRepository extends JpaRepository<RecursoEntity, Integ
     @Query(ACTIVOS_DEL_SERVICIO)
     List<RecursoEntity> listarActivosPorServicio(@Param("idServicio") Integer idServicio);
 
+    @Query("select r from RecursoEntity r where exists (select 1 from ServicioRecursoEntity sr "
+            + "where sr.id.idRecurso = r.id and sr.id.idServicio = :idServicio) order by r.id")
+    List<RecursoEntity> listarAsignadosAServicio(@Param("idServicio") Integer idServicio);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(ACTIVOS_DEL_SERVICIO)
     List<RecursoEntity> bloquearActivosPorServicio(@Param("idServicio") Integer idServicio);

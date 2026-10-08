@@ -23,4 +23,6 @@ public interface ServicioJpaRepository extends JpaRepository<ServicioEntity, Int
                                 @Param("idCategoria") Integer idCategoria);
 
     boolean existsByIdProveedorAndNombre(Integer idProveedor, String nombre);
+
+    List<ServicioEntity> findByIdProveedorOrderByIdAsc(Integer idProveedor);
 }

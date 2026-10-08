@@ -14,7 +14,9 @@ import co.reservas.domain.agenda.HorarioDisponible;
 import co.reservas.domain.reserva.EstadoReserva;
 import co.reservas.domain.reserva.Reserva;
 import co.reservas.domain.servicio.EstadoServicio;
+import co.reservas.domain.servicio.HistorialServicio;
 import co.reservas.domain.servicio.Servicio;
+import co.reservas.domain.servicio.TipoCambioServicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import co.reservas.domain.usuario.Proveedor;
@@ -40,6 +42,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -92,6 +95,10 @@ class AgendaServiceTest {
 
         // Assert
         assertThat(creados).extracting(HorarioResultado::diaSemana).containsExactly(2, 5);
+        verify(servicios).registrarHistorial(HistorialServicio.horarioCreado(7, "Martes 08:00-09:00",
+                PROVEEDOR.idUsuario(), AHORA));
+        verify(servicios).registrarHistorial(HistorialServicio.horarioCreado(7, "Viernes 08:00-09:00",
+                PROVEEDOR.idUsuario(), AHORA));
     }
 
     @Test
@@ -124,6 +131,44 @@ class AgendaServiceTest {
                     assertThat(e.getDetalles()).hasSize(1);
                 });
         verify(agenda, never()).guardar(any());
+        verify(servicios, never()).registrarHistorial(any());
+    }
+
+    @Test
+    @DisplayName("Dado una reserva afectada y confirmar=true, cuando edita, entonces guarda el bloque y el historial registra el bloque anterior y el nuevo")
+    void editarConfirmadoRegistraHistorial() {
+        // Arrange
+        when(agenda.buscarPorId(11)).thenReturn(Optional.of(LUNES));
+        when(verificador.servicioPropioBloqueado(PROVEEDOR, 7)).thenReturn(PROPIO);
+        when(agenda.listarPorServicio(7)).thenReturn(List.of(LUNES));
+        when(reservas.listarConfirmadasFuturasPorServicio(7, AHORA)).thenReturn(List.of(reservaLunes1000()));
+        when(agenda.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        EditarHorarioComando comando = new EditarHorarioComando(1, LocalTime.of(8, 0), LocalTime.of(10, 0));
+
+        // Act
+        CambioHorarioResultado resultado = servicio.editar(PROVEEDOR, 11, comando, true);
+
+        // Assert
+        assertThat(resultado.horario().horaFin()).isEqualTo(LocalTime.of(10, 0));
+        assertThat(resultado.reservasAfectadas()).hasSize(1);
+        verify(servicios).registrarHistorial(HistorialServicio.horarioEditado(7, "Lunes 08:00-12:00",
+                "Lunes 08:00-10:00", PROVEEDOR.idUsuario(), AHORA));
+    }
+
+    @Test
+    @DisplayName("Dado una reserva afectada y confirmar=false, cuando elimina, entonces responde HORARIO_CON_RESERVAS sin eliminar ni registrar historial")
+    void eliminarRequiereConfirmacion() {
+        // Arrange
+        when(agenda.buscarPorId(11)).thenReturn(Optional.of(LUNES));
+        when(verificador.servicioPropioBloqueado(PROVEEDOR, 7)).thenReturn(PROPIO);
+        when(reservas.listarConfirmadasFuturasPorServicio(7, AHORA)).thenReturn(List.of(reservaLunes1000()));
+
+        // Act - Assert
+        assertThatThrownBy(() -> servicio.eliminar(PROVEEDOR, 11, false))
+                .isInstanceOfSatisfying(ExcepcionNegocio.class,
+                        e -> assertThat(e.getCodigo()).isEqualTo(CodigoError.HORARIO_CON_RESERVAS));
+        verify(agenda, never()).eliminar(any());
+        verify(servicios, never()).registrarHistorial(any());
     }
 
     @Test
@@ -139,6 +184,8 @@ class AgendaServiceTest {
 
         // Assert
         verify(agenda).eliminar(11);
+        verify(servicios).registrarHistorial(argThat(cambio ->
+                cambio.tipoCambio() == TipoCambioServicio.HORARIO_ELIMINADO && cambio.valorNuevo() == null));
         assertThat(resultado.horario()).isNull();
         assertThat(resultado.reservasAfectadas()).singleElement()
                 .satisfies(afectada -> assertThat(afectada.fechaHoraInicio().toString())

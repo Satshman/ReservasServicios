@@ -14,6 +14,8 @@ public interface UsuarioRepositoryPort {
 
     Optional<Usuario> buscarPorId(Integer id);
 
+    List<Usuario> buscarPorIds(Collection<Integer> ids);
+
     Optional<Usuario> buscarPorEmail(String emailNormalizado);
 
     /**

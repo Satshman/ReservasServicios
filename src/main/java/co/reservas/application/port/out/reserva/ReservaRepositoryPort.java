@@ -17,6 +17,18 @@ public interface ReservaRepositoryPort {
     void registrarHistorial(HistorialReserva historial);
 
     /**
+     * Cambios de estado de las reservas dadas, en orden cronológico.
+     */
+    List<HistorialReserva> listarHistorial(Collection<Integer> idsReservas);
+
+    Optional<Reserva> buscarPorId(Integer idReserva);
+
+    /**
+     * Reservas que cumplen el criterio, de la más reciente a la más antigua por fecha de inicio.
+     */
+    List<Reserva> buscar(CriterioBusquedaReservas criterio);
+
+    /**
      * Busca la reserva bloqueando su fila ({@code SELECT ... FOR UPDATE}) hasta el fin de la transacción.
      */
     Optional<Reserva> bloquearPorId(Integer idReserva);

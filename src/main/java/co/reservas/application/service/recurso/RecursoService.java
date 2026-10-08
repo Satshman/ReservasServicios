@@ -6,9 +6,11 @@ import co.reservas.application.port.in.recurso.GestionarRecursosUseCase;
 import co.reservas.application.port.in.recurso.RecursoResultado;
 import co.reservas.application.port.out.recurso.RecursoRepositoryPort;
 import co.reservas.application.port.out.servicio.CatalogoRepositoryPort;
+import co.reservas.application.port.out.servicio.ServicioRepositoryPort;
 import co.reservas.application.service.servicio.ServicioPropio;
 import co.reservas.application.service.servicio.VerificadorPropiedad;
 import co.reservas.domain.recurso.Recurso;
+import co.reservas.domain.servicio.HistorialServicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.DetalleCampo;
 import co.reservas.domain.shared.ExcepcionNegocio;
@@ -16,6 +18,8 @@ import co.reservas.domain.usuario.Proveedor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +33,17 @@ public class RecursoService implements GestionarRecursosUseCase {
 
     private final RecursoRepositoryPort recursos;
     private final CatalogoRepositoryPort catalogos;
+    private final ServicioRepositoryPort servicios;
     private final VerificadorPropiedad verificador;
+    private final Clock clock;
 
     public RecursoService(RecursoRepositoryPort recursos, CatalogoRepositoryPort catalogos,
-                          VerificadorPropiedad verificador) {
+                          ServicioRepositoryPort servicios, VerificadorPropiedad verificador, Clock clock) {
         this.recursos = recursos;
         this.catalogos = catalogos;
+        this.servicios = servicios;
         this.verificador = verificador;
+        this.clock = clock;
     }
 
     @Override
@@ -74,8 +82,26 @@ public class RecursoService implements GestionarRecursosUseCase {
         for (Integer id : ids) {
             validarAsignable(encontrados.get(id), id, propio.proveedor());
         }
+        List<Recurso> anteriores = recursos.listarAsignadosAServicio(idServicio);
         recursos.reemplazarAsignaciones(idServicio, ids);
-        return ids.stream().map(encontrados::get).map(RecursoResultado::de).toList();
+        List<Recurso> asignados = ids.stream().map(encontrados::get).toList();
+        registrarAsignacion(usuario, idServicio, anteriores, asignados);
+        return asignados.stream().map(RecursoResultado::de).toList();
+    }
+
+    /**
+     * Registra el cambio en el historial del servicio (HU-11) solo si el conjunto de recursos cambió.
+     */
+    private void registrarAsignacion(UsuarioAutenticado usuario, Integer idServicio, List<Recurso> anteriores,
+                                     List<Recurso> nuevos) {
+        Set<Integer> idsAnteriores = anteriores.stream().map(Recurso::id).collect(Collectors.toSet());
+        Set<Integer> idsNuevos = nuevos.stream().map(Recurso::id).collect(Collectors.toSet());
+        if (idsAnteriores.equals(idsNuevos)) {
+            return;
+        }
+        servicios.registrarHistorial(HistorialServicio.recursosAsignados(idServicio,
+                anteriores.stream().map(Recurso::nombre).toList(), nuevos.stream().map(Recurso::nombre).toList(),
+                usuario.idUsuario(), Instant.now(clock)));
     }
 
     private static void validarAsignable(Recurso recurso, Integer id, Proveedor proveedor) {

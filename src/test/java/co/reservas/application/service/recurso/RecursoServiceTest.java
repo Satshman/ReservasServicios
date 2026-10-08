@@ -5,10 +5,12 @@ import co.reservas.application.port.in.recurso.CrearRecursoComando;
 import co.reservas.application.port.in.recurso.RecursoResultado;
 import co.reservas.application.port.out.recurso.RecursoRepositoryPort;
 import co.reservas.application.port.out.servicio.CatalogoRepositoryPort;
+import co.reservas.application.port.out.servicio.ServicioRepositoryPort;
 import co.reservas.application.service.servicio.ServicioPropio;
 import co.reservas.application.service.servicio.VerificadorPropiedad;
 import co.reservas.domain.recurso.Recurso;
 import co.reservas.domain.servicio.EstadoServicio;
+import co.reservas.domain.servicio.HistorialServicio;
 import co.reservas.domain.servicio.Servicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
@@ -21,8 +23,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 
@@ -37,6 +42,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RecursoServiceTest {
 
+    private static final Instant AHORA = Instant.parse("2026-10-05T13:00:00Z");
     private static final UsuarioAutenticado USUARIO = new UsuarioAutenticado(20, Rol.PROVEEDOR);
     private static final Proveedor PROVEEDOR = new Proveedor(3, 20, "Clínica", ZoneId.of("America/Bogota"));
     private static final ServicioPropio PROPIO = new ServicioPropio(
@@ -47,13 +53,15 @@ class RecursoServiceTest {
     @Mock
     private CatalogoRepositoryPort catalogos;
     @Mock
+    private ServicioRepositoryPort servicios;
+    @Mock
     private VerificadorPropiedad verificador;
 
     private RecursoService servicio;
 
     @BeforeEach
     void configurar() {
-        servicio = new RecursoService(recursos, catalogos, verificador);
+        servicio = new RecursoService(recursos, catalogos, servicios, verificador, Clock.fixed(AHORA, ZoneOffset.UTC));
     }
 
     private static void assertCodigo(Runnable accion, CodigoError codigo) {
@@ -62,12 +70,13 @@ class RecursoServiceTest {
     }
 
     @Test
-    @DisplayName("Dado recursos propios y activos, cuando se asignan a un servicio propio, entonces reemplaza las asignaciones y los devuelve ordenados por id")
+    @DisplayName("Dado recursos propios y activos, cuando se asignan a un servicio propio, entonces reemplaza las asignaciones, los devuelve ordenados por id y registra el cambio en el historial")
     void asignaRecursosPropios() {
         // Arrange
         when(verificador.servicioPropioBloqueado(USUARIO, 7)).thenReturn(PROPIO);
         when(recursos.buscarPorIds(Set.of(4, 2))).thenReturn(List.of(new Recurso(4, 3, 1, "Sala B", true),
                 new Recurso(2, 3, 2, "Equipo", true)));
+        when(recursos.listarAsignadosAServicio(7)).thenReturn(List.of(new Recurso(1, 3, 1, "Sala A", true)));
 
         // Act
         List<RecursoResultado> asignados = servicio.asignarAServicio(USUARIO, 7, Set.of(4, 2));
@@ -75,6 +84,24 @@ class RecursoServiceTest {
         // Assert
         assertThat(asignados).extracting(RecursoResultado::id).containsExactly(2, 4);
         verify(recursos).reemplazarAsignaciones(eq(7), eq(Set.of(2, 4)));
+        verify(servicios).registrarHistorial(HistorialServicio.recursosAsignados(7, List.of("Sala A"),
+                List.of("Equipo", "Sala B"), 20, AHORA));
+    }
+
+    @Test
+    @DisplayName("Dado los mismos recursos ya asignados, cuando se vuelven a asignar, entonces no se registra un cambio en el historial")
+    void asignacionSinCambios() {
+        // Arrange
+        Recurso sala = new Recurso(4, 3, 1, "Sala B", true);
+        when(verificador.servicioPropioBloqueado(USUARIO, 7)).thenReturn(PROPIO);
+        when(recursos.buscarPorIds(Set.of(4))).thenReturn(List.of(sala));
+        when(recursos.listarAsignadosAServicio(7)).thenReturn(List.of(sala));
+
+        // Act
+        servicio.asignarAServicio(USUARIO, 7, Set.of(4));
+
+        // Assert
+        verify(servicios, never()).registrarHistorial(any());
     }
 
     @Test

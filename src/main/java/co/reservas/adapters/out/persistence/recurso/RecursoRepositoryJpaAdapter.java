@@ -59,6 +59,13 @@ public class RecursoRepositoryJpaAdapter implements RecursoRepositoryPort {
     }
 
     @Override
+    public List<Recurso> listarAsignadosAServicio(Integer idServicio) {
+        return recursos.listarAsignadosAServicio(idServicio).stream()
+                .map(RecursoRepositoryJpaAdapter::aDominio)
+                .toList();
+    }
+
+    @Override
     public List<Recurso> bloquearActivosPorServicio(Integer idServicio) {
         return recursos.bloquearActivosPorServicio(idServicio).stream()
                 .map(RecursoRepositoryJpaAdapter::aDominio)

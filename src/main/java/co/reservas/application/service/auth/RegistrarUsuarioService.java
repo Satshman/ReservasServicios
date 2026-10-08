@@ -61,7 +61,7 @@ public class RegistrarUsuarioService implements RegistrarUsuarioUseCase {
         } else {
             Proveedor proveedor = usuarios.guardarProveedor(Proveedor.nuevo(usuario.id(), comando.nombreComercial(),
                     usuario.nombreCompleto(), comando.zonaHoraria()));
-            registroServicios.guardar(proveedor.id(), comando.servicios());
+            registroServicios.guardar(proveedor.id(), comando.servicios(), usuario.id(), ahora);
         }
         solicitadorVerificacion.solicitar(usuario, ahora);
 

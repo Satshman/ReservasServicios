@@ -3,12 +3,14 @@ package co.reservas.application.service.servicio;
 import co.reservas.application.port.in.servicio.NuevoServicioComando;
 import co.reservas.application.port.out.servicio.CatalogoRepositoryPort;
 import co.reservas.application.port.out.servicio.ServicioRepositoryPort;
+import co.reservas.domain.servicio.HistorialServicio;
 import co.reservas.domain.servicio.Servicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.DetalleCampo;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -48,9 +50,17 @@ public class RegistroServicios {
         }
     }
 
-    public List<Servicio> guardar(Integer idProveedor, List<NuevoServicioComando> comandos) {
+    /**
+     * Guarda los servicios y registra su creación en el historial (HU-11) a nombre de {@code idUsuario}.
+     */
+    public List<Servicio> guardar(Integer idProveedor, List<NuevoServicioComando> comandos, Integer idUsuario,
+                                  Instant ahora) {
         return comandos.stream()
-                .map(comando -> servicios.guardar(construir(idProveedor, comando, "")))
+                .map(comando -> {
+                    Servicio servicio = servicios.guardar(construir(idProveedor, comando, ""));
+                    servicios.registrarHistorial(HistorialServicio.creacion(servicio, idUsuario, ahora));
+                    return servicio;
+                })
                 .toList();
     }
 

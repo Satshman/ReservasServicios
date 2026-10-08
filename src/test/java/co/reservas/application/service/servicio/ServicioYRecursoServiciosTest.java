@@ -25,8 +25,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -41,6 +44,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ServicioYRecursoServiciosTest {
 
+    private static final Clock RELOJ = Clock.fixed(Instant.parse("2026-10-05T13:00:00Z"), ZoneOffset.UTC);
     private static final UsuarioAutenticado PROVEEDOR = new UsuarioAutenticado(20, Rol.PROVEEDOR);
     private static final Proveedor PERFIL = new Proveedor(3, 20, "Clínica", ZoneId.of("America/Bogota"));
     private static final Servicio SERVICIO = new Servicio(7, 3, 1, EstadoServicio.ACTIVO, "Consulta", null,
@@ -105,7 +109,7 @@ class ServicioYRecursoServiciosTest {
         // Arrange
         VerificadorPropiedad verificador = new VerificadorPropiedad(usuarios, servicios);
         ServicioService servicioService = new ServicioService(servicios, usuarios,
-                new RegistroServicios(servicios, catalogos), verificador);
+                new RegistroServicios(servicios, catalogos), verificador, RELOJ);
         when(usuarios.buscarProveedorPorUsuario(20)).thenReturn(Optional.of(PERFIL));
         when(catalogos.existeCategoria(1)).thenReturn(true);
         when(servicios.existeNombre(3, "Consulta")).thenReturn(true);
@@ -121,7 +125,7 @@ class ServicioYRecursoServiciosTest {
     void listarServicios() {
         // Arrange
         ServicioService servicioService = new ServicioService(servicios, usuarios,
-                new RegistroServicios(servicios, catalogos), new VerificadorPropiedad(usuarios, servicios));
+                new RegistroServicios(servicios, catalogos), new VerificadorPropiedad(usuarios, servicios), RELOJ);
         when(servicios.listarActivos(null, 1)).thenReturn(List.of(SERVICIO));
         when(usuarios.buscarProveedoresPorIds(List.of(3))).thenReturn(List.of(PERFIL));
 
@@ -141,7 +145,7 @@ class ServicioYRecursoServiciosTest {
     void recursoInactivo() {
         // Arrange
         VerificadorPropiedad verificador = new VerificadorPropiedad(usuarios, servicios);
-        RecursoService recursoService = new RecursoService(recursos, catalogos, verificador);
+        RecursoService recursoService = new RecursoService(recursos, catalogos, servicios, verificador, RELOJ);
         when(servicios.bloquearPorId(7)).thenReturn(Optional.of(SERVICIO));
         when(usuarios.buscarProveedorPorUsuario(20)).thenReturn(Optional.of(PERFIL));
         when(recursos.buscarPorIds(Set.of(5))).thenReturn(List.of(new Recurso(5, 3, 1, "Sala", false)));
@@ -155,8 +159,8 @@ class ServicioYRecursoServiciosTest {
     @DisplayName("Dado un tipo de recurso existente y un nombre libre, cuando crea un recurso, entonces se guarda activo")
     void crearRecurso() {
         // Arrange
-        RecursoService recursoService = new RecursoService(recursos, catalogos,
-                new VerificadorPropiedad(usuarios, servicios));
+        RecursoService recursoService = new RecursoService(recursos, catalogos, servicios,
+                new VerificadorPropiedad(usuarios, servicios), RELOJ);
         when(usuarios.buscarProveedorPorUsuario(20)).thenReturn(Optional.of(PERFIL));
         when(catalogos.existeTipoRecurso(1)).thenReturn(true);
         when(recursos.guardar(any())).thenAnswer(invocacion -> {

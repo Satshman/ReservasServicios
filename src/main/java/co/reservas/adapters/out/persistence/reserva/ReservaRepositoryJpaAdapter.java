@@ -1,14 +1,20 @@
 package co.reservas.adapters.out.persistence.reserva;
 
 import co.reservas.adapters.out.persistence.CatalogoSistema;
+import co.reservas.application.port.out.reserva.CriterioBusquedaReservas;
 import co.reservas.application.port.out.reserva.ReservaRepositoryPort;
 import co.reservas.domain.recurso.OcupacionRecurso;
 import co.reservas.domain.reserva.EstadoReserva;
 import co.reservas.domain.reserva.HistorialReserva;
 import co.reservas.domain.reserva.Reserva;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +54,58 @@ public class ReservaRepositoryJpaAdapter implements ReservaRepositoryPort {
         historial.save(new HistorialReservaEntity(cambio.idReserva(), catalogo.idEstadoReservaONulo(
                 cambio.estadoAnterior()), catalogo.idEstado(cambio.estadoNuevo()), cambio.idUsuario(),
                 cambio.fechaCambio()));
+    }
+
+    @Override
+    public List<HistorialReserva> listarHistorial(Collection<Integer> idsReservas) {
+        if (idsReservas.isEmpty()) {
+            return List.of();
+        }
+        return historial.findByIdReservaInOrderByFechaCambioAscIdAsc(idsReservas).stream()
+                .map(entidad -> new HistorialReserva(entidad.getId(), entidad.getIdReserva(),
+                        catalogo.estadoReserva(entidad.getIdEstadoAnterior()),
+                        catalogo.estadoReserva(entidad.getIdEstadoNuevo()), entidad.getIdUsuario(),
+                        entidad.getFechaCambio()))
+                .toList();
+    }
+
+    @Override
+    public Optional<Reserva> buscarPorId(Integer idReserva) {
+        return reservas.findById(idReserva).map(entidad -> aDominio(List.of(entidad)).getFirst());
+    }
+
+    /**
+     * Consulta parametrizada con Criteria API: solo se agregan los filtros presentes. Usa los índices
+     * {@code (id_cliente, fecha_hora_inicio)} y {@code (id_servicio, fecha_hora_inicio)}.
+     */
+    @Override
+    public List<Reserva> buscar(CriterioBusquedaReservas criterio) {
+        if (criterio.idsServicios() != null && criterio.idsServicios().isEmpty()) {
+            return List.of();
+        }
+        Integer idEstado = criterio.estado() == null ? null : catalogo.idEstado(criterio.estado());
+        Specification<ReservaEntity> especificacion = (raiz, consulta, cb) -> {
+            List<Predicate> condiciones = new ArrayList<>();
+            Path<Instant> inicio = raiz.get("fechaHoraInicio");
+            if (criterio.idCliente() != null) {
+                condiciones.add(cb.equal(raiz.get("idCliente"), criterio.idCliente()));
+            }
+            if (criterio.idsServicios() != null) {
+                condiciones.add(raiz.get("idServicio").in(criterio.idsServicios()));
+            }
+            if (idEstado != null) {
+                condiciones.add(cb.equal(raiz.get("idEstado"), idEstado));
+            }
+            if (criterio.inicioDesde() != null) {
+                condiciones.add(cb.greaterThanOrEqualTo(inicio, criterio.inicioDesde()));
+            }
+            if (criterio.inicioHasta() != null) {
+                condiciones.add(cb.lessThan(inicio, criterio.inicioHasta()));
+            }
+            return cb.and(condiciones.toArray(Predicate[]::new));
+        };
+        return aDominio(reservas.findAll(especificacion,
+                Sort.by(Sort.Order.desc("fechaHoraInicio"), Sort.Order.desc("id"))));
     }
 
     @Override

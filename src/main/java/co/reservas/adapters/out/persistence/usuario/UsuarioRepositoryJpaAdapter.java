@@ -42,6 +42,14 @@ public class UsuarioRepositoryJpaAdapter implements UsuarioRepositoryPort {
     }
 
     @Override
+    public List<Usuario> buscarPorIds(Collection<Integer> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return usuarios.findAllById(ids).stream().map(this::aDominio).toList();
+    }
+
+    @Override
     public Optional<Usuario> buscarPorEmail(String emailNormalizado) {
         return usuarios.buscarPorEmail(emailNormalizado).map(this::aDominio);
     }

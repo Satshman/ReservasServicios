@@ -44,6 +44,19 @@ public record Servicio(
                 descripcionNormalizada, Duration.ofMinutes(duracionMinutos), capacidad == null ? 1 : capacidad);
     }
 
+    public Servicio conEstado(EstadoServicio nuevoEstado) {
+        Objects.requireNonNull(nuevoEstado, "nuevoEstado");
+        return new Servicio(id, idProveedor, idCategoria, nuevoEstado, nombre, descripcion, duracion, capacidad);
+    }
+
+    /**
+     * Resumen de la oferta para el historial, por ejemplo {@code "Consulta · 30 min · capacidad 1"}. La migración
+     * V3 genera el mismo formato para los servicios creados antes del historial.
+     */
+    public String descripcionOferta() {
+        return nombre + " · " + duracion.toMinutes() + " min · capacidad " + capacidad;
+    }
+
     public boolean estaActivo() {
         return estado == EstadoServicio.ACTIVO;
     }

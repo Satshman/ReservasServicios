@@ -21,11 +21,32 @@ export TESTCONTAINERS_RYUK_DISABLED=true
 
 Swagger UI: `/swagger-ui.html`. Mailpit UI: http://localhost:8025. Host ports 5432 and 8080 are taken on the main dev machine, so compose publishes Postgres on 5433 and the app on 8081.
 
+On Windows, Testcontainers uses Docker Desktop (it must be running; no exports needed). The system `JAVA_HOME` there may point to JDK 17, which fails with "class file version 65.0"; set `JAVA_HOME=C:\Program Files\Java\jdk-21` for the command and use `mvnw.cmd`. Integration test classes group their tests in `@Nested` classes, so the surefire `.txt` report of the outer class shows `Tests run: 0`; read the console output or the `TEST-*.xml` reports instead.
+
 ## What this is
 
 A service-booking platform ("Plataforma de Reservas de Servicios") for businesses such as clinics, beauty salons, or sports centers. It is an academic project for CodeF@ctory UdeA 2026-2, **advanced team profile**: the deliverable is a robust backend integrated with a database, not a full web app. The course guidelines list the frontend as N/A for this profile. However, `docs/wiki.md` asks for at least one user story delivered end to end (frontend-backend-DB-deployment) in Sprint 1.
 
 Core features, in priority order: users and service providers, schedules (agendas), reservations, resource availability, reservation history, and occupancy reports.
+
+### Implemented user stories
+
+The `README.md` table "Alcance implementado" is the user-facing list; per-story rules are in `docs/modelo-datos-y-paquetes.md` §4.
+
+| Sprint | HU | Scope |
+|--------|----|-------|
+| 1 | HU-01, HU-02 | Client and provider sign-up (providers register their services) |
+| 1 | HU-03 | Email account verification, JWT login, lockout after failed attempts |
+| 1 | HU-04, HU-05, HU-06 | Create, edit and delete schedule blocks; confirmation required when reservations are affected |
+| 1 | HU-07 | Availability lookup and reservation creation without overbooking |
+| 1 | HU-09 | Resources shared between services without usage conflicts |
+| 2 | HU-08 | Client cancels their reservation at least 5 days ahead; frees capacity and resources |
+| 2 | HU-15 | Provider cancels a reservation of their own service, no minimum notice (same endpoint as HU-08) |
+| 2 | HU-10 | Client reservation history with every state change, who made it and when; filters by service, state and dates |
+| 2 | HU-14 | Provider history of the reservations of their services (same use case and endpoints as HU-10) |
+| 2 | HU-11 | Provider history of changes to their services (creation, schedule, resources, state) and `PUT /servicios/{id}/estado` to activate or deactivate a service |
+
+Still pending (see `docs/modelo-datos-y-paquetes.md` §5): occupancy reports, MFA for admins, refresh tokens and revocation, endpoints for availability exceptions, the stored procedure or trigger, pagination of history lists, and updating `docs/db.md` and the package diagram.
 
 ## Documents and what they govern
 
@@ -46,6 +67,8 @@ Hexagonal, base package `co.reservas`, main class `co.reservas.infrastructure.Re
 - `application` holds use-case interfaces and records (`port.in`), outbound ports (`port.out`), and `@Service`/`@Transactional` implementations (`service`). Ownership checks (ABAC) live here (`VerificadorPropiedad`; `exigirAccesoAReserva` lets only the booking client or the service's provider manage a reservation). Business errors are `ExcepcionNegocio` with a `CodigoError`; `adapters.in.web.error.CodigosHttp` maps codes to HTTP status.
 - `adapters.out.persistence` keeps JPA entities with plain FK ids (no entity graphs). Roles and states are enums resolved to seed-row ids by name through `CatalogoSistema`. Pessimistic locks (`SELECT ... FOR UPDATE`) serialize reservation creation in the order client, service, resources by id. Cancellation (HU-08 by the client, HU-15 by the provider; same use case and endpoint) locks only the reservation row: it frees capacity and resources, so it cannot race with creation.
 - Reservation state transitions are domain methods on `Reserva` (e.g. `cancelar`, which rejects CANCELADA/COMPLETADA, reservations already started, and client cancellations inside the minimum notice window; `PoliticaCancelacion` gives the window per role: 5 days for CLIENTE by default via `CANCELACION_ANTICIPACION_MINIMA`, none for PROVEEDOR). Every transition writes a `HistorialReserva` row (`creacion`, `cambioDeEstado`) with the previous state and the acting user.
+- Changes to a service's offer write a `HistorialServicio` row (`TipoCambioServicio`) in the same transaction as the change: creation (`RegistroServicios.guardar`, shared by provider sign-up and `POST /servicios`), schedule blocks created, edited or deleted (only once applied, not when `confirmar=false` is rejected), resource assignment and state change (only when something actually changes). Any new endpoint that changes a service must record its event.
+- History reads (HU-10/HU-14 in `HistorialReservaService`, HU-11 in `HistorialServicioService`) let the token's role decide the scope: a client sees their own reservations, a provider those of their services. `AutoresCambio` resolves who made each change in one query and exposes only id, name and role. Date filters are local dates in each provider's time zone: the SQL query widens the range by one day on each side and the service applies the exact range.
 - Use the `Clock` bean for "now". Integration tests replace it with `RelojAjustable` and replace `NotificacionPort` with `NotificacionesCapturadas` (see `src/test/java/co/reservas/soporte`).
 - Schema changes go through new Flyway migrations in `src/main/resources/db/migration`; Hibernate only validates (`ddl-auto=validate`).
 

@@ -1,5 +1,6 @@
 package co.reservas.application.port.out.servicio;
 
+import co.reservas.domain.servicio.HistorialServicio;
 import co.reservas.domain.servicio.Servicio;
 
 import java.util.Collection;
@@ -22,4 +23,16 @@ public interface ServicioRepositoryPort {
     List<Servicio> listarActivos(Integer idProveedor, Integer idCategoria);
 
     boolean existeNombre(Integer idProveedor, String nombre);
+
+    /**
+     * Servicios del proveedor en cualquier estado.
+     */
+    List<Servicio> listarPorProveedor(Integer idProveedor);
+
+    void registrarHistorial(HistorialServicio cambio);
+
+    /**
+     * Cambios de los servicios dados en orden cronológico.
+     */
+    List<HistorialServicio> listarHistorial(Collection<Integer> idsServicios);
 }

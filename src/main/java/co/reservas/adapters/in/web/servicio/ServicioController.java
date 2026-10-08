@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -55,5 +56,17 @@ public class ServicioController {
     @Operation(summary = "Consultar un servicio", description = "Errores: 404 SERVICIO_NO_ENCONTRADO.")
     public ServicioResultado consultar(@PathVariable Integer id) {
         return servicios.consultar(id);
+    }
+
+    @PutMapping("/{id}/estado")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Activar o inactivar un servicio (PROVEEDOR dueño)",
+            description = "Un servicio INACTIVO no aparece en el listado ni acepta reservas nuevas; las reservas "
+                    + "confirmadas se mantienen. El cambio queda en el historial del servicio (HU-11). Errores: "
+                    + "400 VALIDACION_FALLIDA, 403 ACCESO_DENEGADO, 404 SERVICIO_NO_ENCONTRADO.")
+    public ServicioResultado cambiarEstado(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+                                           @PathVariable Integer id,
+                                           @Valid @RequestBody CambiarEstadoServicioRequest solicitud) {
+        return servicios.cambiarEstado(SesionActual.de(jwt), id, solicitud.estado());
     }
 }

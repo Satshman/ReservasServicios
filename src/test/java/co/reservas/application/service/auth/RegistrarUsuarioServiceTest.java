@@ -89,7 +89,7 @@ class RegistrarUsuarioServiceTest {
         assertThat(resultado.id()).isEqualTo(5);
         assertThat(resultado.email()).isEqualTo("ana@prueba.co");
         assertThat(resultado.estado()).isEqualTo(EstadoUsuario.PENDIENTE_VERIFICACION);
-        verify(registroServicios).guardar(9, List.of(nuevoServicio));
+        verify(registroServicios).guardar(9, List.of(nuevoServicio), 5, AHORA);
         verify(solicitador).solicitar(any(Usuario.class), eq(AHORA));
         verify(usuarios, never()).guardarCliente(any());
     }
@@ -143,6 +143,6 @@ class RegistrarUsuarioServiceTest {
         // Assert
         assertThat(resultado.rol()).isEqualTo(Rol.CLIENTE);
         verify(usuarios).guardarCliente(any());
-        verify(registroServicios, never()).guardar(anyInt(), any());
+        verify(registroServicios, never()).guardar(anyInt(), any(), any(), any());
     }
 }

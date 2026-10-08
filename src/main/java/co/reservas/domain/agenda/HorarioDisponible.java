@@ -18,6 +18,9 @@ import java.util.Objects;
 public record HorarioDisponible(Integer id, Integer idServicio, DayOfWeek diaSemana, LocalTime horaInicio,
                                 LocalTime horaFin) {
 
+    private static final String[] NOMBRES_DIAS = {
+            "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"};
+
     public HorarioDisponible {
         Objects.requireNonNull(diaSemana, "diaSemana");
         Objects.requireNonNull(horaInicio, "horaInicio");
@@ -33,6 +36,13 @@ public record HorarioDisponible(Integer id, Integer idServicio, DayOfWeek diaSem
             throw ExcepcionNegocio.validacion("diaSemana", "Debe estar entre 1 (lunes) y 7 (domingo)");
         }
         return new HorarioDisponible(id, idServicio, DayOfWeek.of(diaSemana), horaInicio, horaFin);
+    }
+
+    /**
+     * Descripción legible del bloque para el historial, por ejemplo {@code "Lunes 08:00-12:00"}.
+     */
+    public String descripcion() {
+        return NOMBRES_DIAS[diaSemana.getValue() - 1] + " " + horaInicio + "-" + horaFin;
     }
 
     public Duration duracion() {
