@@ -1,5 +1,5 @@
 # Etapa 1: compilación con Maven Wrapper
-FROM docker.io/library/eclipse-temurin:21-jdk-alpine AS construccion
+FROM docker.io/library/eclipse-temurin:25-jdk-alpine AS construccion
 WORKDIR /fuente
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
@@ -10,7 +10,7 @@ RUN ./mvnw -B -q package -DskipTests -Djacoco.skip=true \
     && cp target/reservas-servicios-*.jar /fuente/app.jar
 
 # Etapa 2: imagen de ejecución mínima con usuario sin privilegios
-FROM docker.io/library/eclipse-temurin:21-jre-alpine
+FROM docker.io/library/eclipse-temurin:25-jre-alpine
 RUN addgroup -S reservas && adduser -S -G reservas reservas
 WORKDIR /app
 COPY --from=construccion --chown=reservas:reservas /fuente/app.jar app.jar
