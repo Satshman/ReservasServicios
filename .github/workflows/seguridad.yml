@@ -72,7 +72,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Comparar dependencias contra la base de avisos
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
