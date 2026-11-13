@@ -1,6 +1,7 @@
 package co.reservas.adapters.in.web.auth;
 
 import co.reservas.adapters.in.web.ApiRutas;
+import co.reservas.application.port.in.auth.GestionarSesionTokenUseCase;
 import co.reservas.application.port.in.auth.IniciarSesionUseCase;
 import co.reservas.application.port.in.auth.ReenviarVerificacionUseCase;
 import co.reservas.application.port.in.auth.RegistrarUsuarioUseCase;
@@ -10,6 +11,8 @@ import co.reservas.application.port.in.auth.VerificarCuentaUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,20 +24,29 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping(ApiRutas.V1 + "/auth")
-@Tag(name = "Autenticación", description = "Registro, verificación de cuenta e inicio de sesión (HU-01, HU-02, HU-03)")
+@Tag(name = "Autenticación", description = "Registro, verificación de cuenta, inicio de sesión, rotación y revocación de tokens")
 public class AuthController {
 
     private final RegistrarUsuarioUseCase registrarUsuario;
     private final VerificarCuentaUseCase verificarCuenta;
     private final ReenviarVerificacionUseCase reenviarVerificacion;
     private final IniciarSesionUseCase iniciarSesion;
+    private final GestionarSesionTokenUseCase sesionToken;
 
     public AuthController(RegistrarUsuarioUseCase registrarUsuario, VerificarCuentaUseCase verificarCuenta,
                           ReenviarVerificacionUseCase reenviarVerificacion, IniciarSesionUseCase iniciarSesion) {
+        this(registrarUsuario, verificarCuenta, reenviarVerificacion, iniciarSesion, null);
+    }
+
+    @Autowired
+    public AuthController(RegistrarUsuarioUseCase registrarUsuario, VerificarCuentaUseCase verificarCuenta,
+                          ReenviarVerificacionUseCase reenviarVerificacion, IniciarSesionUseCase iniciarSesion,
+                          GestionarSesionTokenUseCase sesionToken) {
         this.registrarUsuario = registrarUsuario;
         this.verificarCuenta = verificarCuenta;
         this.reenviarVerificacion = reenviarVerificacion;
         this.iniciarSesion = iniciarSesion;
+        this.sesionToken = sesionToken;
     }
 
     @PostMapping("/registro")
@@ -70,5 +82,25 @@ public class AuthController {
                     + "423 CUENTA_BLOQUEADA.")
     public SesionResultado login(@Valid @RequestBody LoginRequest solicitud) {
         return iniciarSesion.iniciarSesion(solicitud.email(), solicitud.password());
+    }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Rotar token de acceso mediante refresh token",
+            description = "Invalida el refresh token recibido y emite un nuevo par accessToken + refreshToken. "
+                    + "Errores: 401 CREDENCIALES_INVALIDAS.")
+    public SesionResultado refresh(@Valid @RequestBody RefreshTokenRequest solicitud) {
+        return sesionToken.rotar(solicitud.refreshToken());
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Cerrar sesión y revocar refresh token")
+    public MensajeResponse logout(@Valid @RequestBody RefreshTokenRequest solicitud) {
+        sesionToken.revocar(solicitud.refreshToken());
+        return new MensajeResponse("Sesión cerrada correctamente.");
+    }
+
+    public record RefreshTokenRequest(
+            @NotBlank(message = "El token de refresco es obligatorio") String refreshToken
+    ) {
     }
 }
