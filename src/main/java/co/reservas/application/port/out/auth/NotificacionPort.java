@@ -6,4 +6,10 @@ public interface NotificacionPort {
      * Envía el correo con el enlace de verificación construido a partir del token en claro.
      */
     void enviarVerificacionCuenta(String email, String nombre, String tokenPlano);
+
+    /**
+     * Envía el código temporal de segundo factor (MFA) para acceso de administrador.
+     */
+    default void enviarCodigoMfa(String email, String nombre, String codigo) {
+    }
 }

@@ -35,6 +35,7 @@ public class CalculadoraDisponibilidad {
         List<Turno> candidatos = GeneradorTurnos.generar(contexto.bloques(), contexto.servicio().duracion(),
                         contexto.zona(), desde, hasta).stream()
                 .filter(turno -> turno.inicio().isAfter(ahora))
+                .filter(turno -> noEstaEnExcepcion(contexto, turno))
                 .toList();
         return filtrarDisponibles(contexto, candidatos, Integer.MAX_VALUE);
     }
@@ -48,10 +49,16 @@ public class CalculadoraDisponibilidad {
         List<Turno> candidatos = GeneradorTurnos.generar(contexto.bloques(), contexto.servicio().duracion(),
                         contexto.zona(), desde, desde.plusDays(DIAS_SUGERENCIAS)).stream()
                 .filter(turno -> turno.inicio().isAfter(ahora) && !turno.inicio().isBefore(desdeInstante))
+                .filter(turno -> noEstaEnExcepcion(contexto, turno))
                 .toList();
         return filtrarDisponibles(contexto, candidatos, MAXIMO_SUGERENCIAS).stream()
                 .map(turno -> new SugerenciaTurno(turno.fechaHoraInicio(), turno.fechaHoraFin()))
                 .toList();
+    }
+
+    private static boolean noEstaEnExcepcion(ContextoAgenda contexto, Turno turno) {
+        return contexto.excepciones().stream()
+                .noneMatch(ex -> ex.bloquea(turno.inicio(), contexto.servicio().duracion(), contexto.zona()));
     }
 
     private List<TurnoDisponible> filtrarDisponibles(ContextoAgenda contexto, List<Turno> candidatos, int limite) {

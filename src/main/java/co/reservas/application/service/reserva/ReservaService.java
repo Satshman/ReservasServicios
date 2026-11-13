@@ -9,12 +9,14 @@ import co.reservas.application.port.in.reserva.CrearReservaUseCase;
 import co.reservas.application.port.in.reserva.RecursoEnConflicto;
 import co.reservas.application.port.in.reserva.ReservaResultado;
 import co.reservas.application.port.out.agenda.AgendaRepositoryPort;
+import co.reservas.application.port.out.agenda.ExcepcionDisponibilidadRepositoryPort;
 import co.reservas.application.port.out.recurso.RecursoRepositoryPort;
 import co.reservas.application.port.out.reserva.ReservaRepositoryPort;
 import co.reservas.application.port.out.servicio.ServicioRepositoryPort;
 import co.reservas.application.port.out.usuario.UsuarioRepositoryPort;
 import co.reservas.application.service.servicio.ServicioPropio;
 import co.reservas.application.service.servicio.VerificadorPropiedad;
+import co.reservas.domain.agenda.ExcepcionDisponibilidad;
 import co.reservas.domain.agenda.GeneradorTurnos;
 import co.reservas.domain.recurso.DetectorConflictosRecursos;
 import co.reservas.domain.recurso.Recurso;
@@ -28,6 +30,7 @@ import co.reservas.domain.usuario.Cliente;
 import co.reservas.domain.usuario.Proveedor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +58,7 @@ public class ReservaService implements CrearReservaUseCase, ConsultarReservasUse
     private final UsuarioRepositoryPort usuarios;
     private final AgendaRepositoryPort agenda;
     private final RecursoRepositoryPort recursos;
+    private final ExcepcionDisponibilidadRepositoryPort excepciones;
     private final CalculadoraDisponibilidad calculadora;
     private final VerificadorPropiedad verificador;
     private final PoliticaCancelacion politicaCancelacion;
@@ -65,11 +69,22 @@ public class ReservaService implements CrearReservaUseCase, ConsultarReservasUse
                           UsuarioRepositoryPort usuarios, AgendaRepositoryPort agenda, RecursoRepositoryPort recursos,
                           CalculadoraDisponibilidad calculadora, VerificadorPropiedad verificador,
                           PoliticaCancelacion politicaCancelacion, Clock clock) {
+        this(reservas, servicios, usuarios, agenda, recursos, null, calculadora, verificador, politicaCancelacion, clock);
+    }
+
+    @Autowired
+    @SuppressWarnings("java:S107")
+    public ReservaService(ReservaRepositoryPort reservas, ServicioRepositoryPort servicios,
+                          UsuarioRepositoryPort usuarios, AgendaRepositoryPort agenda, RecursoRepositoryPort recursos,
+                          ExcepcionDisponibilidadRepositoryPort excepciones,
+                          CalculadoraDisponibilidad calculadora, VerificadorPropiedad verificador,
+                          PoliticaCancelacion politicaCancelacion, Clock clock) {
         this.reservas = reservas;
         this.servicios = servicios;
         this.usuarios = usuarios;
         this.agenda = agenda;
         this.recursos = recursos;
+        this.excepciones = excepciones;
         this.calculadora = calculadora;
         this.verificador = verificador;
         this.politicaCancelacion = politicaCancelacion;
@@ -96,7 +111,10 @@ public class ReservaService implements CrearReservaUseCase, ConsultarReservasUse
             throw new ExcepcionNegocio(CodigoError.RESERVA_EN_EL_PASADO, "La fecha y hora de inicio debe ser futura.");
         }
         ContextoAgenda contexto = contexto(servicio);
-        if (!GeneradorTurnos.esTurnoValido(contexto.bloques(), servicio.duracion(), contexto.zona(), inicio)) {
+        boolean bloqueadoPorExcepcion = contexto.excepciones().stream()
+                .anyMatch(ex -> ex.bloquea(inicio, servicio.duracion(), contexto.zona()));
+        if (bloqueadoPorExcepcion
+                || !GeneradorTurnos.esTurnoValido(contexto.bloques(), servicio.duracion(), contexto.zona(), inicio)) {
             throw new ExcepcionNegocio(CodigoError.HORARIO_NO_DISPONIBLE,
                     "La fecha y hora no corresponde a un turno de la agenda del servicio.",
                     calculadora.sugerencias(contexto, inicio, ahora));
@@ -171,8 +189,11 @@ public class ReservaService implements CrearReservaUseCase, ConsultarReservasUse
     private ContextoAgenda contexto(Servicio servicio) {
         Proveedor proveedor = usuarios.buscarProveedorPorId(servicio.idProveedor())
                 .orElseThrow(() -> new IllegalStateException("Servicio sin proveedor: " + servicio.id()));
+        List<ExcepcionDisponibilidad> listaExcepciones = excepciones != null
+                ? excepciones.listarPorServicio(servicio.id())
+                : List.of();
         return new ContextoAgenda(servicio, proveedor.zonaHoraria(), agenda.listarPorServicio(servicio.id()),
-                recursos.listarActivosPorServicio(servicio.id()));
+                recursos.listarActivosPorServicio(servicio.id()), listaExcepciones);
     }
 
     private void validarRecursosLibres(ContextoAgenda contexto, List<Recurso> recursosBloqueados, Instant inicio,
@@ -190,7 +211,7 @@ public class ReservaService implements CrearReservaUseCase, ConsultarReservasUse
         List<Object> detalles = new ArrayList<>();
         ocupados.forEach(id -> detalles.add(new RecursoEnConflicto(id, porId.get(id).nombre())));
         ContextoAgenda actualizado = new ContextoAgenda(contexto.servicio(), contexto.zona(), contexto.bloques(),
-                recursosBloqueados);
+                recursosBloqueados, contexto.excepciones());
         detalles.addAll(calculadora.sugerencias(actualizado, inicio, ahora));
         throw new ExcepcionNegocio(CodigoError.RECURSO_NO_DISPONIBLE,
                 "Uno o más recursos del servicio ya están ocupados en ese horario.", detalles);
