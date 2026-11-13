@@ -18,6 +18,10 @@ Proyecto académico de CodeF@ctory UdeA 2026-2, perfil de equipo avanzado. El di
 | 2 | HU-10 | El cliente consulta el historial de sus reservas, con cada cambio de estado, quién lo hizo y cuándo, filtrando por estado o fechas |
 | 2 | HU-11 | El proveedor consulta el historial de cambios de sus servicios (creación, agenda, recursos y estado), filtrando por servicio |
 | 2 | HU-14 | El proveedor consulta el historial de las reservas de su negocio, filtrando por servicio, estado o fechas |
+| 3 | HU-12 | Generar reportes de ocupación de servicios por día o bloque horario |
+| 3 | HU-13 | Generar reportes de desempeño de servicios mediante función almacenada en PostgreSQL |
+| 3 | Bug-84 | Corrección del generador de turnos ante cambios al horario de verano (DST) |
+| 3 | Seguridad y Agenda | Excepciones de disponibilidad, *refresh tokens* con rotación/revocación y MFA para administradores |
 
 ## Tecnologías
 
