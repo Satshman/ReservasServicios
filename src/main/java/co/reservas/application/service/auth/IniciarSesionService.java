@@ -31,14 +31,23 @@ public class IniciarSesionService implements IniciarSesionUseCase {
     private final PoliticaBloqueo politicaBloqueo;
     private final Clock clock;
     private final String hashFicticio;
+    private final SesionTokenService sesionTokenService;
 
     public IniciarSesionService(UsuarioRepositoryPort usuarios, PasswordHasherPort passwordHasher,
                                 TokenEmisorPort tokenEmisor, PoliticaBloqueo politicaBloqueo, Clock clock) {
+        this(usuarios, passwordHasher, tokenEmisor, politicaBloqueo, clock, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public IniciarSesionService(UsuarioRepositoryPort usuarios, PasswordHasherPort passwordHasher,
+                                TokenEmisorPort tokenEmisor, PoliticaBloqueo politicaBloqueo, Clock clock,
+                                SesionTokenService sesionTokenService) {
         this.usuarios = usuarios;
         this.passwordHasher = passwordHasher;
         this.tokenEmisor = tokenEmisor;
         this.politicaBloqueo = politicaBloqueo;
         this.clock = clock;
+        this.sesionTokenService = sesionTokenService;
         this.hashFicticio = passwordHasher.hashear("contrasena-ficticia-tiempo-constante");
     }
 
@@ -80,9 +89,12 @@ public class IniciarSesionService implements IniciarSesionUseCase {
         validarEstado(usuario);
 
         TokenEmisorPort.TokenAcceso token = tokenEmisor.emitir(usuario);
+        String refreshToken = sesionTokenService != null
+                ? sesionTokenService.emitirTokenRefresco(usuario.id(), ahora)
+                : null;
         registrarEvento("LOGIN_EXITOSO", usuario.id());
         return new SesionResultado(token.valor(), TIPO_TOKEN, token.expiraEnSegundos(), usuario.rol(),
-                usuario.rol().rutaPanel());
+                usuario.rol().rutaPanel(), refreshToken);
     }
 
     private static void validarEstado(Usuario usuario) {
