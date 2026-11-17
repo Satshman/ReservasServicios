@@ -3,14 +3,17 @@ package co.reservas.application.service.reserva;
 import co.reservas.application.port.in.reserva.ConsultarDisponibilidadUseCase;
 import co.reservas.application.port.in.reserva.DisponibilidadResultado;
 import co.reservas.application.port.out.agenda.AgendaRepositoryPort;
+import co.reservas.application.port.out.agenda.ExcepcionDisponibilidadRepositoryPort;
 import co.reservas.application.port.out.recurso.RecursoRepositoryPort;
 import co.reservas.application.port.out.servicio.ServicioRepositoryPort;
 import co.reservas.application.port.out.usuario.UsuarioRepositoryPort;
 import co.reservas.application.service.servicio.VerificadorPropiedad;
+import co.reservas.domain.agenda.ExcepcionDisponibilidad;
 import co.reservas.domain.servicio.Servicio;
 import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import co.reservas.domain.usuario.Proveedor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +21,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 public class DisponibilidadService implements ConsultarDisponibilidadUseCase {
@@ -28,16 +32,26 @@ public class DisponibilidadService implements ConsultarDisponibilidadUseCase {
     private final UsuarioRepositoryPort usuarios;
     private final AgendaRepositoryPort agenda;
     private final RecursoRepositoryPort recursos;
+    private final ExcepcionDisponibilidadRepositoryPort excepciones;
     private final CalculadoraDisponibilidad calculadora;
     private final Clock clock;
 
     public DisponibilidadService(ServicioRepositoryPort servicios, UsuarioRepositoryPort usuarios,
                                  AgendaRepositoryPort agenda, RecursoRepositoryPort recursos,
                                  CalculadoraDisponibilidad calculadora, Clock clock) {
+        this(servicios, usuarios, agenda, recursos, null, calculadora, clock);
+    }
+
+    @Autowired
+    public DisponibilidadService(ServicioRepositoryPort servicios, UsuarioRepositoryPort usuarios,
+                                 AgendaRepositoryPort agenda, RecursoRepositoryPort recursos,
+                                 ExcepcionDisponibilidadRepositoryPort excepciones,
+                                 CalculadoraDisponibilidad calculadora, Clock clock) {
         this.servicios = servicios;
         this.usuarios = usuarios;
         this.agenda = agenda;
         this.recursos = recursos;
+        this.excepciones = excepciones;
         this.calculadora = calculadora;
         this.clock = clock;
     }
@@ -52,8 +66,12 @@ public class DisponibilidadService implements ConsultarDisponibilidadUseCase {
         }
         Proveedor proveedor = usuarios.buscarProveedorPorId(servicio.idProveedor())
                 .orElseThrow(() -> new IllegalStateException("Servicio sin proveedor: " + idServicio));
+        List<ExcepcionDisponibilidad> listaExcepciones = excepciones != null
+                ? excepciones.listarPorServicio(idServicio)
+                : List.of();
         ContextoAgenda contexto = new ContextoAgenda(servicio, proveedor.zonaHoraria(),
-                agenda.listarPorServicio(idServicio), recursos.listarActivosPorServicio(idServicio));
+                agenda.listarPorServicio(idServicio), recursos.listarActivosPorServicio(idServicio),
+                listaExcepciones);
         return new DisponibilidadResultado(idServicio, proveedor.zonaHoraria().getId(),
                 calculadora.turnosDisponibles(contexto, desde, hasta, Instant.now(clock)));
     }

@@ -52,25 +52,28 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(reglas -> reglas
+               .authorizeHttpRequests(reglas -> reglas
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
                                 "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST, V1 + "/auth/registro", V1 + "/auth/login",
-                                V1 + "/auth/verificacion/reenvio").permitAll()
+                                V1 + "/auth/verificacion/reenvio", V1 + "/auth/refresh",
+                                V1 + "/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, V1 + "/auth/verificacion").permitAll()
                         .requestMatchers(HttpMethod.GET, V1 + "/catalogos/*").permitAll()
                         // Antes de la regla pública de /servicios/*, que también coincide con /servicios/historial
                         .requestMatchers(HttpMethod.GET, V1 + "/servicios/historial").hasRole(PROVEEDOR)
                         .requestMatchers(HttpMethod.GET, V1 + "/servicios", V1 + "/servicios/*",
-                                V1 + "/servicios/*/horarios", V1 + "/servicios/*/disponibilidad").permitAll()
+                                V1 + "/servicios/*/horarios", V1 + "/servicios/*/excepciones",
+                                V1 + "/servicios/*/disponibilidad").permitAll()
                         .requestMatchers(HttpMethod.POST, V1 + "/servicios", V1 + "/servicios/*/horarios",
-                                V1 + "/recursos").hasRole(PROVEEDOR)
+                                V1 + "/servicios/*/excepciones", V1 + "/recursos").hasRole(PROVEEDOR)
                         .requestMatchers(HttpMethod.PUT, V1 + "/horarios/*", V1 + "/servicios/*/recursos",
                                 V1 + "/servicios/*/estado")
                         .hasRole(PROVEEDOR)
-                        .requestMatchers(HttpMethod.DELETE, V1 + "/horarios/*").hasRole(PROVEEDOR)
-                        .requestMatchers(HttpMethod.GET, V1 + "/recursos", V1 + "/servicios/*/reservas")
+                        .requestMatchers(HttpMethod.DELETE, V1 + "/horarios/*", V1 + "/excepciones/*").hasRole(PROVEEDOR)
+                        .requestMatchers(HttpMethod.GET, V1 + "/recursos", V1 + "/servicios/*/reservas",
+                                V1 + "/reportes/*")
                         .hasRole(PROVEEDOR)
                         .requestMatchers(HttpMethod.POST, V1 + "/reservas").hasRole(CLIENTE)
                         .requestMatchers(HttpMethod.GET, V1 + "/reservas/mias").hasRole(CLIENTE)
