@@ -4,6 +4,7 @@ import co.reservas.adapters.in.web.ApiRutas;
 import co.reservas.adapters.in.web.auth.SesionActual;
 import co.reservas.application.port.in.servicio.CambioServicioResultado;
 import co.reservas.application.port.in.servicio.ConsultarHistorialServiciosUseCase;
+import co.reservas.domain.shared.Paginacion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -33,10 +34,13 @@ public class HistorialServicioController {
     @Operation(summary = "Historial de cambios de mis servicios (PROVEEDOR, HU-11)",
             description = "Cambios en orden cronológico: creación, bloques de agenda creados, editados o eliminados, "
                     + "recursos asignados y cambios de estado, con el valor anterior y el nuevo, quién lo hizo y "
-                    + "cuándo. Sin idServicio incluye todos los servicios del proveedor. Errores: "
-                    + "403 ACCESO_DENEGADO (servicio de otro proveedor), 404 SERVICIO_NO_ENCONTRADO.")
+                    + "cuándo. Soporta paginación opcional con pagina y tamano. Sin idServicio incluye todos los "
+                    + "servicios del proveedor. Errores: 400 VALIDACION_FALLIDA, 403 ACCESO_DENEGADO, 404 SERVICIO_NO_ENCONTRADO.")
     public List<CambioServicioResultado> consultar(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
-                                                   @RequestParam(required = false) Integer idServicio) {
-        return historial.consultar(SesionActual.de(jwt), idServicio);
+                                                   @RequestParam(required = false) Integer idServicio,
+                                                   @RequestParam(required = false) Integer pagina,
+                                                   @RequestParam(required = false) Integer tamano) {
+        List<CambioServicioResultado> resultado = historial.consultar(SesionActual.de(jwt), idServicio);
+        return Paginacion.aplicar(resultado, pagina, tamano);
     }
 }
