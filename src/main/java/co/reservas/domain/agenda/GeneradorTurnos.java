@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -35,10 +34,7 @@ public final class GeneradorTurnos {
     public static boolean esTurnoValido(Collection<HorarioDisponible> bloques, Duration duracion, ZoneId zona,
                                         Instant inicio) {
         LocalDateTime inicioLocal = LocalDateTime.ofInstant(inicio, zona);
-        LocalDateTime finLocal = LocalDateTime.ofInstant(inicio.plus(duracion), zona);
-        return bloques.stream().anyMatch(bloque ->
-                bloque.admiteTurno(inicioLocal, duracion)
-                        && !finLocal.isAfter(inicioLocal.toLocalDate().atTime(bloque.horaFin())));
+        return bloques.stream().anyMatch(bloque -> bloque.admiteTurno(inicioLocal, duracion));
     }
 
     private static void agregarTurnosDelBloque(TreeMap<Instant, Turno> turnos, HorarioDisponible bloque,
@@ -46,15 +42,8 @@ public final class GeneradorTurnos {
         LocalDateTime limite = fecha.atTime(bloque.horaFin());
         LocalDateTime inicio = fecha.atTime(bloque.horaInicio());
         while (!inicio.plus(duracion).isAfter(limite)) {
-            ZonedDateTime inicioEnZona = inicio.atZone(zona);
-            if (inicioEnZona.toLocalDateTime().equals(inicio)) {
-                Instant inicioInstante = inicioEnZona.toInstant();
-                Instant finInstante = inicioInstante.plus(duracion);
-                LocalDateTime finLocal = LocalDateTime.ofInstant(finInstante, zona);
-                if (!finLocal.isAfter(limite)) {
-                    turnos.putIfAbsent(inicioInstante, new Turno(inicioInstante, finInstante));
-                }
-            }
+            Instant inicioInstante = inicio.atZone(zona).toInstant();
+            turnos.putIfAbsent(inicioInstante, new Turno(inicioInstante, inicioInstante.plus(duracion)));
             inicio = inicio.plus(duracion);
         }
     }
