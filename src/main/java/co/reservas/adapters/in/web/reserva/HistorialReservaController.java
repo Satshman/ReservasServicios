@@ -6,7 +6,6 @@ import co.reservas.application.port.in.reserva.ConsultarHistorialReservasUseCase
 import co.reservas.application.port.in.reserva.FiltroHistorialReservas;
 import co.reservas.application.port.in.reserva.HistorialReservaResultado;
 import co.reservas.domain.reserva.EstadoReserva;
-import co.reservas.domain.shared.Paginacion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -39,8 +38,8 @@ public class HistorialReservaController {
     @Operation(summary = "Historial de reservas (CLIENTE: las mías, HU-10; PROVEEDOR: las de mis servicios, HU-14)",
             description = "Reservas de la más reciente a la más antigua por fecha de inicio, cada una con sus cambios "
                     + "de estado (anterior, nuevo, quién y cuándo). Filtros opcionales: idServicio, estado (estado "
-                    + "actual), desde/hasta y paginación opcional (pagina, tamano). Sin reservas "
-                    + "responde una lista vacía. Errores: 400 VALIDACION_FALLIDA (hasta anterior a desde o paginación inválida), "
+                    + "actual) y desde/hasta (fechas de inicio, inclusivas, en la zona del proveedor). Sin reservas "
+                    + "responde una lista vacía. Errores: 400 VALIDACION_FALLIDA (hasta anterior a desde), "
                     + "400 SOLICITUD_INVALIDA (parámetro mal formado), 403 ACCESO_DENEGADO (servicio de otro "
                     + "proveedor), 404 SERVICIO_NO_ENCONTRADO.")
     public List<HistorialReservaResultado> consultar(
@@ -50,12 +49,8 @@ public class HistorialReservaController {
             @Parameter(example = "2026-10-01") @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
             @Parameter(example = "2026-10-31") @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
-            @RequestParam(required = false) Integer pagina,
-            @RequestParam(required = false) Integer tamano) {
-        List<HistorialReservaResultado> resultado = historial.consultar(
-                SesionActual.de(jwt), new FiltroHistorialReservas(idServicio, estado, desde, hasta));
-        return Paginacion.aplicar(resultado, pagina, tamano);
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+        return historial.consultar(SesionActual.de(jwt), new FiltroHistorialReservas(idServicio, estado, desde, hasta));
     }
 
     @GetMapping("/{idReserva}/historial")
