@@ -10,6 +10,7 @@ import co.reservas.application.service.servicio.VerificadorPropiedad;
 import co.reservas.domain.agenda.ExcepcionDisponibilidad;
 import co.reservas.domain.servicio.EstadoServicio;
 import co.reservas.domain.servicio.Servicio;
+import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import co.reservas.domain.usuario.Proveedor;
 import co.reservas.domain.usuario.Rol;
@@ -26,12 +27,17 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -92,5 +98,71 @@ class ExcepcionDisponibilidadServiceTest {
         // Act & Assert
         assertThrows(ExcepcionNegocio.class,
                 () -> service.crear(usuarioProveedor, 100, comandoInvalido));
+    }
+
+    @Test
+    @DisplayName("Dado un servicio con excepciones registradas, cuando se listan, entonces devuelve una por cada una en el mismo orden del repositorio")
+    void listaLasExcepcionesDelServicio() {
+        // Arrange
+        ExcepcionDisponibilidad navidad = new ExcepcionDisponibilidad(
+                5, 100, LocalDate.of(2026, 12, 25), null, null, "Festivo");
+        ExcepcionDisponibilidad mantenimiento = new ExcepcionDisponibilidad(
+                6, 100, LocalDate.of(2026, 12, 24), LocalTime.of(10, 0), LocalTime.of(12, 0), "Mantenimiento");
+        when(servicios.buscarPorId(100)).thenReturn(Optional.of(servicio));
+        when(excepciones.listarPorServicio(100)).thenReturn(List.of(navidad, mantenimiento));
+
+        // Act
+        List<ExcepcionResultado> resultado = service.listarPorServicio(100);
+
+        // Assert
+        assertEquals(2, resultado.size());
+        assertEquals(5, resultado.get(0).id());
+        assertEquals("Festivo", resultado.get(0).motivo());
+        // Una excepción de día completo no lleva horas.
+        assertNull(resultado.get(0).horaInicio());
+        assertEquals(LocalTime.of(10, 0), resultado.get(1).horaInicio());
+    }
+
+    @Test
+    @DisplayName("Dado un servicio que no existe, cuando se listan sus excepciones, entonces falla con SERVICIO_NO_ENCONTRADO")
+    void listarExigeQueElServicioExista() {
+        // Arrange
+        when(servicios.buscarPorId(404)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        ExcepcionNegocio error = assertThrows(ExcepcionNegocio.class, () -> service.listarPorServicio(404));
+        assertEquals(CodigoError.SERVICIO_NO_ENCONTRADO, error.getCodigo());
+        verify(excepciones, never()).listarPorServicio(any());
+    }
+
+    @Test
+    @DisplayName("Dado el proveedor dueño del servicio, cuando elimina una excepción existente, entonces verifica la propiedad y la borra")
+    void eliminaExcepcionPropia() {
+        // Arrange
+        ExcepcionDisponibilidad existente = new ExcepcionDisponibilidad(
+                5, 100, LocalDate.of(2026, 12, 25), null, null, "Festivo");
+        when(excepciones.buscarPorId(5)).thenReturn(Optional.of(existente));
+        when(verificador.servicioPropio(usuarioProveedor, 100))
+                .thenReturn(new ServicioPropio(servicio, proveedor));
+
+        // Act
+        service.eliminar(usuarioProveedor, 5);
+
+        // Assert: la propiedad se verifica contra el servicio de la excepción, no contra uno que llegue por fuera.
+        verify(verificador).servicioPropio(usuarioProveedor, 100);
+        verify(excepciones).eliminar(5);
+    }
+
+    @Test
+    @DisplayName("Dada una excepción que no existe, cuando se intenta eliminar, entonces falla con HORARIO_NO_ENCONTRADO y no borra nada")
+    void eliminarExcepcionInexistente() {
+        // Arrange
+        when(excepciones.buscarPorId(404)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        ExcepcionNegocio error = assertThrows(ExcepcionNegocio.class,
+                () -> service.eliminar(usuarioProveedor, 404));
+        assertEquals(CodigoError.HORARIO_NO_ENCONTRADO, error.getCodigo());
+        verify(excepciones, never()).eliminar(any());
     }
 }
