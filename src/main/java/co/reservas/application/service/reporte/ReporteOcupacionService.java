@@ -65,7 +65,7 @@ public class ReporteOcupacionService implements GenerarReporteOcupacionUseCase {
         for (LocalDate fecha = filtro.desde(); !fecha.isAfter(filtro.hasta()); fecha = fecha.plusDays(1)) {
             final LocalDate fechaActual = fecha;
             List<HorarioDisponible> bloquesDelDia = bloques.stream()
-                    .filter(b -> b.diaSemana() == fechaActual.getDayOfWeek())
+                    .filter(b -> fechaActual.getDayOfWeek().equals(b.diaSemana()))
                     .sorted(Comparator.comparing(HorarioDisponible::horaInicio))
                     .toList();
 

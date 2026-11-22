@@ -24,7 +24,7 @@ public final class GeneradorTurnos {
         TreeMap<Instant, Turno> turnos = new TreeMap<>();
         for (LocalDate fecha = desde; !fecha.isAfter(hasta); fecha = fecha.plusDays(1)) {
             for (HorarioDisponible bloque : bloques) {
-                if (bloque.diaSemana() == fecha.getDayOfWeek()) {
+                if (fecha.getDayOfWeek().equals(bloque.diaSemana())) {
                     agregarTurnosDelBloque(turnos, bloque, fecha, duracion, zona);
                 }
             }
