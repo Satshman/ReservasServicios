@@ -111,7 +111,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Instalar dependencias exactas
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Verificar tipos
         run: npm run typecheck

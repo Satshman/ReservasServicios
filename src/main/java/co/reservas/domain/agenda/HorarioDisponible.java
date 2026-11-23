@@ -61,7 +61,7 @@ public record HorarioDisponible(Integer id, Integer idServicio, DayOfWeek diaSem
     public boolean seSolapaCon(HorarioDisponible otro) {
         boolean mismoBloque = id != null && id.equals(otro.id);
         return !mismoBloque
-                && diaSemana == otro.diaSemana
+                && diaSemana.equals(otro.diaSemana)
                 && horaInicio.isBefore(otro.horaFin)
                 && otro.horaInicio.isBefore(horaFin);
     }
@@ -90,14 +90,11 @@ public record HorarioDisponible(Integer id, Integer idServicio, DayOfWeek diaSem
      */
     public boolean contieneInicio(LocalDateTime inicioLocal) {
         LocalTime hora = inicioLocal.toLocalTime();
-        return inicioLocal.getDayOfWeek() == diaSemana && !hora.isBefore(horaInicio) && hora.isBefore(horaFin);
+        return inicioLocal.getDayOfWeek().equals(diaSemana) && !hora.isBefore(horaInicio) && hora.isBefore(horaFin);
     }
 
-    /**
-     * Indica si el intervalo local completo cabe dentro del bloque, sin cruzar la medianoche.
-     */
     public boolean contieneIntervalo(LocalDateTime inicioLocal, LocalDateTime finLocal) {
-        return inicioLocal.getDayOfWeek() == diaSemana
+        return inicioLocal.getDayOfWeek().equals(diaSemana)
                 && inicioLocal.toLocalDate().equals(finLocal.toLocalDate())
                 && !inicioLocal.toLocalTime().isBefore(horaInicio)
                 && !finLocal.toLocalTime().isAfter(horaFin);
