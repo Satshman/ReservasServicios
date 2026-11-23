@@ -1,0 +1,57 @@
+# QA: crear Blueprint desde Satshman/ReservasServicios, rama qa, ruta render.qa.yaml.
+# DB_* debe apuntar exclusivamente a fabrica/neondb en Neon.
+services:
+  - name: reservaya-api-qa
+    type: web
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: qa
+    autoDeploy: false
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: APP_CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: MAIL_HOST
+        value: smtp-relay.sendinblue.com
+      - key: MAIL_PORT
+        value: "2525"
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_SMTP_AUTH
+        value: "true"
+      - key: MAIL_SMTP_STARTTLS
+        value: "true"
+      - key: APP_MAIL_FROM
+        sync: false
+      - key: SWAGGER_ENABLED
+        value: "true"
+
+  - name: reservaya-web-qa
+    type: web
+    runtime: static
+    branch: qa
+    autoDeploy: false
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
