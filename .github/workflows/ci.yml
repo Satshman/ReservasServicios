@@ -5,9 +5,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, qa]
   pull_request:
-    branches: [main]
+    branches: [main, qa]
   workflow_dispatch:
 
 # Un solo pipeline vivo por rama: un push nuevo cancela el anterior.
