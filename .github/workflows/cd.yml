@@ -52,11 +52,15 @@ jobs:
           URL_SALUD: ${{ vars.URL_SALUD_BACKEND || 'https://reservaya-vvke.onrender.com/actuator/health' }}
         run: |
           echo "Consultando $URL_SALUD"
+          respuesta="$RUNNER_TEMP/salud.json"
           for intento in $(seq 1 15); do
             # 60 s por intento: el arranque en frío del plan gratuito tarda cerca de un minuto.
-            estado=$(curl -fsS --max-time 60 "$URL_SALUD" \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status","DESCONOCIDO"))' \
-              2>/dev/null || echo "SIN_RESPUESTA")
+            # La respuesta se guarda y se lee como dato: nunca se encadena a un intérprete.
+            if curl -fsS --max-time 60 -o "$respuesta" "$URL_SALUD"; then
+              estado=$(jq -r '.status // "DESCONOCIDO"' "$respuesta" 2>/dev/null || echo "ILEGIBLE")
+            else
+              estado="SIN_RESPUESTA"
+            fi
             echo "Intento $intento: $estado"
             if [ "$estado" = "UP" ]; then
               echo "Backend respondiendo en $URL_SALUD" >> "$GITHUB_STEP_SUMMARY"
