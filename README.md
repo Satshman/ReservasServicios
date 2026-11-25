@@ -21,7 +21,7 @@ Proyecto académico de CodeF@ctory UdeA 2026-2, perfil de equipo avanzado. El di
 | 3 | HU-12 | Generar reportes de ocupación de servicios por día o bloque horario |
 | 3 | HU-13 | Generar reportes de desempeño de servicios mediante función almacenada en PostgreSQL |
 | 3 | Bug-84 | Corrección del generador de turnos ante cambios al horario de verano (DST) |
-| 3 | Seguridad y Agenda | Excepciones de disponibilidad, *refresh tokens* con rotación/revocación y MFA para administradores |
+| 3 | Seguridad y Agenda | Excepciones de disponibilidad, *refresh tokens* con rotación/revocación y MFA por correo para administradores ([ADR-0009](docs/adr/0009-mfa-por-correo-para-administradores.md)) |
 | 3 | Observabilidad | Métricas en Prometheus, dashboard en Grafana y alertas por correo con Alertmanager ([ADR-0008](docs/adr/0008-observabilidad-con-prometheus-y-grafana.md)) |
 | 3 | Pruebas | Pruebas de integración de sesiones, excepciones de disponibilidad y reportes; pruebas de aceptación en Gherkin con Cucumber |
 
@@ -105,7 +105,7 @@ export TESTCONTAINERS_RYUK_DISABLED=true
 
 El reporte de cobertura queda en `target/site/jacoco/index.html`. Las pruebas siguen el patrón AAA y sus nombres (`@DisplayName`) describen el escenario Gherkin de cada criterio de aceptación. Las clases `*IntegracionTest` recorren la API con MockMvc; el resto son pruebas unitarias del dominio, los servicios de aplicación y los adaptadores. `ObservabilidadIntegracionTest` arranca la aplicación en puertos reales para comprobar lo que lee Prometheus.
 
-Las pruebas de aceptación del backend son escenarios Gherkin en español (`src/test/resources/features/`), ejecutados con Cucumber sobre el mismo contexto de las pruebas de integración. Sus pasos están en `src/test/java/co/reservas/aceptacion/`. Cubren HU-03, HU-07, HU-08 y HU-15, y la revocación de sesiones. `./mvnw verify` las incluye, y su reporte queda en `target/cucumber/aceptacion.html`.
+Las pruebas de aceptación del backend son escenarios Gherkin en español (`src/test/resources/features/`), ejecutados con Cucumber sobre el mismo contexto de las pruebas de integración. Sus pasos están en `src/test/java/co/reservas/aceptacion/`. Cubren HU-03, HU-07, HU-08 y HU-15, la revocación de sesiones y el MFA de administradores. `./mvnw verify` las incluye, y su reporte queda en `target/cucumber/aceptacion.html`.
 
 ## Contrato de la API
 
@@ -136,6 +136,8 @@ Abra http://localhost:8081/swagger-ui.html con el stack de Compose en marcha.
 11. **HU-14**: con el token del proveedor, el mismo `GET /reservas/historial` lista las reservas de todos sus servicios; agregue `?idServicio=`, `?estado=` o fechas para filtrar. Un `idServicio` de otro proveedor responde `403 ACCESO_DENEGADO`.
 12. **HU-11**: con el token del proveedor, `GET /servicios/historial?idServicio=…` muestra la creación del servicio y, en orden, los bloques de agenda creados, editados o eliminados, los recursos asignados y los cambios de estado. Para generar uno, `PUT /servicios/{idServicio}/estado` con `{"estado":"INACTIVO"}` (el servicio deja de aceptar reservas) y luego `{"estado":"ACTIVO"}`. Sin `idServicio` incluye todos sus servicios; un servicio ajeno responde `403 ACCESO_DENEGADO`.
 13. Cinco contraseñas incorrectas seguidas bloquean la cuenta 15 minutos (`423 CUENTA_BLOQUEADA` aunque la contraseña sea correcta).
+14. **Sesiones**: la respuesta del login trae `refreshToken`. `POST /auth/refresh` con `{"refreshToken":"…"}` devuelve un par nuevo; usar otra vez el token anterior responde `401` y revoca todas las sesiones del usuario. `POST /auth/logout` revoca el token.
+15. **MFA de administrador**: defina `APP_ADMIN_EMAIL` y `APP_ADMIN_PASSWORD` en `.env` y reinicie la app; la cuenta se crea al arrancar. `POST /auth/login` con esa cuenta responde `403 ACCESO_DENEGADO`. Use `POST /auth/mfa/solicitud` con `{"email":"…","password":"…"}` (`202`), copie el código de 6 dígitos del correo en Mailpit y envíelo a `POST /auth/mfa/verificacion` con `{"email":"…","codigo":"…"}`: recibe los tokens con `rol: ADMIN`. Cinco códigos incorrectos bloquean la cuenta (`423`).
 
 ## Despliegue (Render + Neon)
 
@@ -196,3 +198,4 @@ El contenedor escucha el puerto que indica la variable `PORT`, que Render inyect
 | `MANAGEMENT_PORT` | Puerto de gestión del actuador (solo con el perfil `observabilidad`) | `8091` |
 | `GRAFANA_ADMIN_PASSWORD` | Clave del usuario `admin` de Grafana (`docker-compose.observabilidad.yml`) | obligatoria con ese compose |
 | `PROMETHEUS_HOST_PORT`, `ALERTMANAGER_HOST_PORT`, `GRAFANA_HOST_PORT` | Puertos del host de las herramientas de observabilidad | `9390`, `9393`, `3001` |
+| `APP_ADMIN_EMAIL`, `APP_ADMIN_PASSWORD`, `APP_ADMIN_NOMBRE` | Cuenta de administrador que se crea al arrancar si no existe (clave de 12 a 64 caracteres) | vacías: no se crea |

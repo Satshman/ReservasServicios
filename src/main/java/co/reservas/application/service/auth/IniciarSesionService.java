@@ -9,6 +9,7 @@ import co.reservas.domain.shared.CodigoError;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import co.reservas.domain.usuario.EstadoUsuario;
 import co.reservas.domain.usuario.PoliticaBloqueo;
+import co.reservas.domain.usuario.Rol;
 import co.reservas.domain.usuario.Usuario;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,6 +88,12 @@ public class IniciarSesionService implements IniciarSesionUseCase {
             usuario = usuarios.guardar(usuario.conIntentosReiniciados());
         }
         validarEstado(usuario);
+        if (usuario.rol() == Rol.ADMIN) {
+            // Va después de validar la contraseña para no revelar qué cuentas son de administrador.
+            registrarEvento("LOGIN_ADMIN_SIN_MFA", usuario.id());
+            throw new ExcepcionNegocio(CodigoError.ACCESO_DENEGADO,
+                    "Las cuentas de administrador inician sesión con segundo factor: use /api/v1/auth/mfa/solicitud.");
+        }
 
         TokenEmisorPort.TokenAcceso token = tokenEmisor.emitir(usuario);
         String refreshToken = sesionTokenService != null

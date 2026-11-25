@@ -16,6 +16,7 @@ Los lineamientos §3.7 exigen **mínimo 3 ADR priorizados** en el Sprint 1.
 | [0006](0006-sesiones-revocables-con-tokens-de-refresco-rotativos.md) | Sesiones revocables con tokens de refresco rotativos y detección de reutilización | Aceptada | 2026-11-23 | Seguridad, gestión de sesiones, revocación de credenciales | Equipo Avanzado — Isaac Mesa |
 | [0007](0007-agregacion-del-reporte-de-servicios-en-una-funcion-almacenada.md) | La agregación del reporte de desempeño de servicios vive en una función almacenada | Aceptada | 2026-11-23 | Persistencia, ubicación de la lógica de consulta, regla de dependencia | Equipo Avanzado — Isaac Mesa |
 | [0008](0008-observabilidad-con-prometheus-y-grafana.md) | Observabilidad con Prometheus y Grafana, con métricas de negocio derivadas de la métrica HTTP | Propuesta | 2026-11-24 | Observabilidad, operación, seguridad del endpoint de métricas | Equipo Avanzado — Sara Mesa |
+| [0009](0009-mfa-por-correo-para-administradores.md) | MFA por correo para administradores, con aprovisionamiento por variables de entorno | Propuesta | 2026-11-24 | Seguridad, autenticación de cuentas privilegiadas | Equipo Avanzado — Sara Mesa |
 
 ## Qué decidió cada sprint
 
@@ -23,7 +24,7 @@ Esta sección existe para responder de un vistazo qué se mantuvo, qué se ajust
 
 - **Sprint 1 — ADR-0001 a 0005.** Las cinco decisiones de fundación: estilo arquitectónico, modelo de catálogos, concurrencia de reservas, autenticación y gestión del esquema.
 - **Sprint 2 — ninguna decisión nueva.** Las historias de cancelación e historiales (HU-08, HU-10, HU-11, HU-14, HU-15) se implementaron dentro de las decisiones vigentes, sin alterar ninguna: una tabla nueva y dos índices, cero cambios a tablas existentes. No hay ADR porque no hubo decisión arquitectónica que registrar.
-- **Sprint 3 — ADR-0006 y 0007.** El 0006 cierra la deuda que el 0004 se había declarado a sí mismo sobre revocación de tokens, y reafirma la decisión de CSRF explicando por qué sigue siendo válida. El 0007 resuelve dónde debe vivir la agregación de un reporte y, de paso, el procedimiento almacenado que los lineamientos §3.2 pedían desde el Sprint 1. Las cinco decisiones del Sprint 1 **se mantienen**; ninguna fue reemplazada.
+- **Sprint 3 — ADR-0006 a 0009.** El 0006 cierra la deuda que el 0004 se había declarado a sí mismo sobre revocación de tokens, y reafirma la decisión de CSRF explicando por qué sigue siendo válida. El 0007 resuelve dónde debe vivir la agregación de un reporte y, de paso, el procedimiento almacenado que los lineamientos §3.2 pedían desde el Sprint 1. El 0008 agrega la observabilidad con Prometheus y Grafana sin tocar las capas de dominio y aplicación. El 0009 completa el MFA de administradores que exigen los lineamientos §3.4. Las cinco decisiones del Sprint 1 **se mantienen**; ninguna fue reemplazada.
 
 ## Convenciones
 

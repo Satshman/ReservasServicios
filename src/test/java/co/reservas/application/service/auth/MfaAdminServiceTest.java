@@ -9,6 +9,7 @@ import co.reservas.application.port.out.usuario.UsuarioRepositoryPort;
 import co.reservas.domain.shared.ExcepcionNegocio;
 import co.reservas.domain.usuario.CodigoMfa;
 import co.reservas.domain.usuario.EstadoUsuario;
+import co.reservas.domain.usuario.PoliticaBloqueo;
 import co.reservas.domain.usuario.Rol;
 import co.reservas.domain.usuario.TokenVerificacion;
 import co.reservas.domain.usuario.Usuario;
@@ -21,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -59,7 +61,8 @@ class MfaAdminServiceTest {
     @BeforeEach
     void setUp() {
         service = new MfaAdminService(
-                usuarios, passwordHasher, codigosMfa, notificaciones, tokenEmisor, sesionTokenService, clock);
+                usuarios, passwordHasher, codigosMfa, notificaciones, tokenEmisor, sesionTokenService,
+                new PoliticaBloqueo(5, Duration.ofMinutes(15)), clock);
     }
 
     @Test

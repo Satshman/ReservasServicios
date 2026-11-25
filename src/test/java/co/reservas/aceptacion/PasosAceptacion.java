@@ -1,11 +1,13 @@
 package co.reservas.aceptacion;
 
+import co.reservas.application.port.in.auth.AprovisionarAdministradorUseCase;
 import co.reservas.soporte.PruebaIntegracion;
 import io.cucumber.java.After;
 import io.cucumber.java.es.Cuando;
 import io.cucumber.java.es.Dado;
 import io.cucumber.java.es.Entonces;
 import io.cucumber.spring.CucumberContextConfiguration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.JsonNode;
 
@@ -30,7 +32,11 @@ public class PasosAceptacion extends PruebaIntegracion {
             "viernes", 5, "sábado", 6, "domingo", 7);
     private static final String ZONA = "-05:00";
 
+    @Autowired
+    private AprovisionarAdministradorUseCase aprovisionador;
+
     private ProveedorDePrueba proveedor;
+    private String emailAdmin;
     private String tokenCliente;
     private String emailCliente;
     private String refreshToken;
@@ -152,6 +158,59 @@ public class PasosAceptacion extends PruebaIntegracion {
     @Cuando("intenta renovar la sesión con su token de refresco")
     public void intentaRenovarLaSesion() throws Exception {
         respuesta = enviar(post(V1 + "/auth/refresh"), Map.of("refreshToken", refreshToken), null).andReturn();
+    }
+
+    // ---- MFA de administradores ----
+
+    @Dado("un administrador aprovisionado desde la configuración")
+    public void unAdministradorAprovisionado() {
+        emailAdmin = emailUnico("admin");
+        aprovisionador.aprovisionar(emailAdmin, "Administradora", PASSWORD);
+    }
+
+    @Cuando("el administrador inicia sesión por el login normal")
+    public void elAdministradorIniciaSesionNormal() throws Exception {
+        respuesta = login(emailAdmin, PASSWORD).andReturn();
+    }
+
+    @Cuando("el administrador solicita el código MFA con su contraseña")
+    @Dado("que el administrador solicitó el código MFA")
+    public void elAdministradorSolicitaElCodigo() throws Exception {
+        respuesta = enviar(post(V1 + "/auth/mfa/solicitud"), Map.of("email", emailAdmin, "password", PASSWORD), null)
+                .andReturn();
+    }
+
+    @Dado("verificó {int} códigos incorrectos")
+    public void verificoCodigosIncorrectos(int veces) throws Exception {
+        String incorrecto = codigoMfaRecibido().equals("000000") ? "111111" : "000000";
+        for (int intento = 0; intento < veces; intento++) {
+            verificarCodigoMfa(incorrecto);
+        }
+    }
+
+    @Cuando("el administrador verifica el código recibido")
+    public void elAdministradorVerificaElCodigo() throws Exception {
+        verificarCodigoMfa(codigoMfaRecibido());
+    }
+
+    @Entonces("el administrador recibe un código de 6 dígitos por correo")
+    public void recibeUnCodigo() {
+        assertThat(codigoMfaRecibido()).matches("\\d{6}");
+    }
+
+    @Entonces("la sesión tiene el rol {string}")
+    public void laSesionTieneElRol(String rol) throws Exception {
+        assertThat(cuerpo().get("rol").asString()).isEqualTo(rol);
+        assertThat(cuerpo().get("accessToken").asString()).isNotBlank();
+    }
+
+    private String codigoMfaRecibido() {
+        return notificaciones.ultimoCodigoMfaPara(emailAdmin).orElseThrow();
+    }
+
+    private void verificarCodigoMfa(String codigo) throws Exception {
+        respuesta = enviar(post(V1 + "/auth/mfa/verificacion"), Map.of("email", emailAdmin, "codigo", codigo), null)
+                .andReturn();
     }
 
     // ---- Resultados ----

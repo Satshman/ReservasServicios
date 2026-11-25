@@ -74,6 +74,7 @@ Todas corren con `./mvnw verify` (en Windows: `mvnw.cmd verify` con `JAVA_HOME` 
 | Clase | Cubre |
 |-------|-------|
 | `adapters/in/web/auth/SesionTokenIntegracionTest` | Rotación del refresh token, detección de reutilización (revoca todas las sesiones), logout idempotente (ADR-0006) |
+| `adapters/in/web/auth/MfaIntegracionTest` | MFA de administradores: login normal rechazado, código por correo de un solo uso, vencimiento a los 5 minutos, bloqueo tras 5 errores, aprovisionamiento idempotente (ADR-0009) |
 | `adapters/in/web/agenda/ExcepcionDisponibilidadIntegracionTest` | Excepciones de disponibilidad: efecto en la disponibilidad y en las reservas, validación, RBAC, ABAC y eliminación |
 | `adapters/in/web/reporte/ReporteIntegracionTest` | HU-12 ocupación por día y por bloque; HU-13 desempeño por servicio; validación y propiedad |
 | `infrastructure/observabilidad/ObservabilidadIntegracionTest` | Arranca la app en puertos reales con el perfil `observabilidad`: Prometheus lee sin token por el puerto de gestión, la etiqueta `codigo_error` aparece, el puerto de la API no expone métricas |
@@ -84,6 +85,7 @@ Todas corren con `./mvnw verify` (en Windows: `mvnw.cmd verify` con `JAVA_HOME` 
 - Escenarios en `src/test/resources/features/` (en español, `# language: es`):
   - `reservas.feature`: HU-07, HU-08 y HU-15 (reserva, sobrecupo con sugerencias, cancelación dentro y fuera de plazo, cancelación del proveedor).
   - `inicio_sesion.feature`: HU-03 y ADR-0006 (login, bloqueo tras 5 intentos, vencimiento del bloqueo, logout que revoca el refresh token).
+  - `mfa_administrador.feature`: ADR-0009 (el administrador no entra solo con contraseña, entra con código, adivinar el código bloquea la cuenta).
 - Pasos en `src/test/java/co/reservas/aceptacion/PasosAceptacion.java`. Reutilizan el contexto de `PruebaIntegracion`: contenedor PostgreSQL, reloj ajustable y correo capturado.
 - Ejecutor: `AceptacionTest`. Para correr solo estas: `./mvnw test -Dtest=AceptacionTest`.
 - El reporte HTML queda en `target/cucumber/aceptacion.html`.

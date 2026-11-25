@@ -41,6 +41,24 @@ public class SmtpNotificacionAdapter implements NotificacionPort {
         mailSender.send(mensaje);
     }
 
+    @Override
+    public void enviarCodigoMfa(String email, String nombre, String codigo) {
+        SimpleMailMessage mensaje = new SimpleMailMessage();
+        mensaje.setFrom(remitente);
+        mensaje.setTo(email);
+        mensaje.setSubject("Código de acceso de administrador - Plataforma de Reservas de Servicios");
+        mensaje.setText("""
+                Hola %s,
+
+                Tu código de verificación para iniciar sesión como administrador es:
+
+                %s
+
+                Vence en 5 minutos y sirve una sola vez. Si no intentaste iniciar sesión, cambia tu contraseña.
+                """.formatted(nombre, codigo));
+        mailSender.send(mensaje);
+    }
+
     String enlaceVerificacion(String tokenPlano) {
         return UriComponentsBuilder.fromUriString(baseUrl)
                 .path(RUTA_VERIFICACION)

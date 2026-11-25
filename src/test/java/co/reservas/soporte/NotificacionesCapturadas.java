@@ -25,6 +25,22 @@ public class NotificacionesCapturadas implements NotificacionPort {
         enviados.add(new CorreoVerificacion(email, nombre, tokenPlano));
     }
 
+    public record CodigoMfaEnviado(String email, String codigo) {
+    }
+
+    private final List<CodigoMfaEnviado> codigosMfa = new CopyOnWriteArrayList<>();
+
+    @Override
+    public void enviarCodigoMfa(String email, String nombre, String codigo) {
+        codigosMfa.add(new CodigoMfaEnviado(email, codigo));
+    }
+
+    public Optional<String> ultimoCodigoMfaPara(String email) {
+        return codigosMfa.stream().filter(enviado -> enviado.email().equals(email))
+                .map(CodigoMfaEnviado::codigo)
+                .reduce((primero, segundo) -> segundo);
+    }
+
     public Optional<CorreoVerificacion> ultimoPara(String email) {
         return enviados.stream().filter(correo -> correo.email().equals(email)).reduce((primero, segundo) -> segundo);
     }

@@ -58,7 +58,8 @@ public class SecurityConfig {
                                 "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST, V1 + "/auth/registro", V1 + "/auth/login",
                                 V1 + "/auth/verificacion/reenvio", V1 + "/auth/refresh",
-                                V1 + "/auth/logout").permitAll()
+                                V1 + "/auth/logout", V1 + "/auth/mfa/solicitud", V1 + "/auth/mfa/verificacion")
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, V1 + "/auth/verificacion").permitAll()
                         .requestMatchers(HttpMethod.GET, V1 + "/catalogos/*").permitAll()
                         // Antes de la regla pública de /servicios/*, que también coincide con /servicios/historial

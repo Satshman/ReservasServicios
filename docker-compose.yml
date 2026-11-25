@@ -47,6 +47,10 @@ services:
       LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
       LOGIN_LOCK_DURATION: ${LOGIN_LOCK_DURATION:-15m}
       CANCELACION_ANTICIPACION_MINIMA: ${CANCELACION_ANTICIPACION_MINIMA:-5d}
+      # Opcional: crea la cuenta de administrador al arrancar (inicia sesión con MFA). Vacías, no hace nada.
+      APP_ADMIN_EMAIL: ${APP_ADMIN_EMAIL:-}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-}
+      APP_ADMIN_NOMBRE: ${APP_ADMIN_NOMBRE:-}
     ports:
       - "${APP_HOST_PORT:-8081}:8080"
 

@@ -349,10 +349,15 @@ Todos bajo `/api/v1`.
 | HU-11 (Sprint 2) | `ConsultarHistorialServiciosUseCase` | `GET /servicios/historial?idServicio=` | PROVEEDOR dueño |
 | HU-11 (Sprint 2) | `GestionarServiciosUseCase` | `PUT /servicios/{idServicio}/estado` | PROVEEDOR dueño |
 | HU-09 | `GestionarRecursosUseCase` | `POST /recursos` · `GET /recursos` · `PUT /servicios/{idServicio}/recursos` | PROVEEDOR |
+| Sprint 3 | `GestionarSesionTokenUseCase` | `POST /auth/refresh` · `POST /auth/logout` | Público (con refresh token) |
+| Sprint 3 | `MfaAdminUseCase` | `POST /auth/mfa/solicitud` · `POST /auth/mfa/verificacion` | Público (cuentas ADMIN) |
+| HU-12 (Sprint 3) | `GenerarReporteOcupacionUseCase` | `GET /reportes/ocupacion?idServicio=&desde=&hasta=&desglose=DIA\|BLOQUE_HORARIO` | PROVEEDOR dueño |
+| HU-13 (Sprint 3) | `GenerarReporteServiciosUseCase` | `GET /reportes/servicios?idProveedor=&desde=&hasta=` | PROVEEDOR (sus servicios) |
+| Sprint 3 | `GestionarExcepcionesDisponibilidadUseCase` | `POST /servicios/{idServicio}/excepciones` · `GET /servicios/{idServicio}/excepciones` (público) · `DELETE /excepciones/{id}` | PROVEEDOR dueño |
 | Soporte | `GestionarServiciosUseCase` | `POST /servicios` (PROVEEDOR) · `GET /servicios` · `GET /servicios/{id}` (públicos) | — |
 | Soporte | `ConsultarCatalogosUseCase` | `GET /catalogos/categorias` · `/tipos-recurso` · `/tipos-documento` | Público |
 
-Componentes nuevos frente al diagrama original: `AuthController`, `ServicioController`, `RecursoController`, `CatalogoController`. `CancelarReservaUseCase` se implementó en el Sprint 2 dentro de `ReservaController`; los historiales, en `HistorialReservaController` y `HistorialServicioController` (etiqueta Swagger "Historial"). Quedan pendientes `GenerarReporteOcupacionUseCase` y `ReporteController`.
+Componentes nuevos frente al diagrama original: `AuthController`, `ServicioController`, `RecursoController`, `CatalogoController`. `CancelarReservaUseCase` se implementó en el Sprint 2 dentro de `ReservaController`; los historiales, en `HistorialReservaController` y `HistorialServicioController` (etiqueta Swagger "Historial"). En el Sprint 3 se agregaron `ReporteController` (HU-12, HU-13), `ExcepcionDisponibilidadController` y `MfaController`; la rotación y revocación de tokens están en `AuthController`. `AprovisionarAdministradorUseCase` no tiene endpoint: lo invoca `infrastructure.config.AdministradorInicialConfig` al arrancar.
 
 ---
 
@@ -404,8 +409,18 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
   2. Cuenta bloqueada (`bloqueado_hasta > ahora`) → `423 CUENTA_BLOQUEADA` solo si la contraseña es correcta; si no, `401`. Durante el bloqueo no se suman intentos.
   3. Contraseña incorrecta → `intentos_fallidos + 1`. Al llegar a **5**, `bloqueado_hasta = ahora + 15 min` y el contador vuelve a 0. `401 CREDENCIALES_INVALIDAS`.
   4. Contraseña correcta → contador a 0. `PENDIENTE_VERIFICACION` → `403 CUENTA_NO_VERIFICADA`; `INACTIVO` → `403 CUENTA_INACTIVA`.
-  5. Éxito → `200` con `accessToken` (JWT HS256, 30 min), `tokenType: "Bearer"`, `expiresIn`, `rol` y `redirectTo` (`/panel/cliente`, `/panel/proveedor` o `/panel/admin`).
+  5. Cuenta `ADMIN` con contraseña correcta → `403 ACCESO_DENEGADO`: los administradores entran por MFA (ver «Sesiones y MFA»). La comprobación va después de la contraseña para no revelar qué correos son de administrador.
+  6. Éxito → `200` con `accessToken` (JWT HS256, 30 min), `tokenType: "Bearer"`, `expiresIn`, `rol`, `redirectTo` (`/panel/cliente` o `/panel/proveedor`) y `refreshToken`.
 - Los intentos, el bloqueo y la expiración son configurables. Eventos de seguridad (`LOGIN_EXITOSO`, `LOGIN_FALLIDO`, `CUENTA_BLOQUEADA`) se registran con el id de usuario, nunca con el correo ni la contraseña.
+
+### Sesiones y MFA de administradores (Sprint 3)
+- **Refresh token** ([ADR-0006](adr/0006-sesiones-revocables-con-tokens-de-refresco-rotativos.md)): opaco, guardado como hash SHA-256 en `tbl_tokens_refresco`, vigente 7 días y de un solo uso. `POST /auth/refresh` lo revoca y emite un par nuevo; reutilizar uno ya rotado revoca todas las sesiones del usuario. `POST /auth/logout` lo revoca y responde `200` aunque ya estuviera revocado o no exista.
+- **MFA** ([ADR-0009](adr/0009-mfa-por-correo-para-administradores.md)), en dos pasos:
+  1. `POST /auth/mfa/solicitud` (`email`, `password`) → `202` y un código de 6 dígitos por correo, guardado como hash en `tbl_codigos_mfa`, vigente 5 minutos y de un solo uso. Cada solicitud anula los códigos pendientes anteriores. Cuenta que no es `ADMIN` → `403 ACCESO_DENEGADO`; correo inexistente → `401` tras comparar con un hash ficticio (tiempo constante, como el login).
+  2. `POST /auth/mfa/verificacion` (`email`, `codigo`) → `200` con la misma respuesta del login (`rol: ADMIN`, `redirectTo: /panel/admin`, `refreshToken`). Código incorrecto, vencido o usado → `401 CREDENCIALES_INVALIDAS`; formato distinto de 6 dígitos → `400 VALIDACION_FALLIDA`.
+- Las contraseñas y los códigos incorrectos suman al mismo contador de `PoliticaBloqueo` que el login: 5 errores bloquean la cuenta 15 minutos (`423 CUENTA_BLOQUEADA`). El contador solo se reinicia al completar los dos pasos, así que pedir un código nuevo no da más intentos.
+- **Primer administrador**: el registro público no crea cuentas `ADMIN`. Si se definen `APP_ADMIN_EMAIL` y `APP_ADMIN_PASSWORD` (12 a 64 caracteres; opcional `APP_ADMIN_NOMBRE`), al arrancar se crea la cuenta `ACTIVO`. Si el correo ya existe no se modifica nada; un valor inválido detiene el arranque.
+- Eventos de seguridad: `MFA_SOLICITADO`, `MFA_FALLIDO`, `MFA_VERIFICADO`, `CUENTA_BLOQUEADA`, `LOGIN_ADMIN_SIN_MFA` y `ADMIN_APROVISIONADO`, con el id de usuario y sin correo, contraseña ni código.
 
 ### HU-04 — Crear agenda
 - Cuerpo: `diasSemana` (lista 1–7), `horaInicio`, `horaFin`. Crea un bloque por día, todo o nada.
@@ -490,10 +505,12 @@ Todas las respuestas de error (incluidas 401 y 403 de seguridad) usan el mismo c
 | Tema | Estado |
 |------|--------|
 | Cancelar reserva por el cliente (HU-08) y por el proveedor (HU-15) | Implementadas en el Sprint 2 |
-| Historial de reservas del cliente (HU-10) y del negocio (HU-14), historial de servicios (HU-11) | Implementados en el Sprint 2. Sin paginación: las listas crecen con el uso y conviene paginarlas antes de producción |
+| Historial de reservas del cliente (HU-10) y del negocio (HU-14), historial de servicios (HU-11) | Implementados en el Sprint 2; paginación opcional (`pagina`, `tamano`) agregada en el Sprint 3 |
 | Editar nombre, duración o capacidad de un servicio | Sin endpoint; cuando exista debe registrar su evento en `tbl_historial_servicios` |
-| Reportes de ocupación | Pendiente |
-| MFA para administradores, refresh tokens y revocación | Sprint 3 ("aseguramiento mediante tokens") |
-| Endpoints de excepciones de disponibilidad | Solo existe la tabla |
-| Procedimiento almacenado o trigger | Sprint 3 (Bases de Datos) |
+| Reportes de ocupación (HU-12) y de desempeño (HU-13) | Implementados en el Sprint 3 |
+| MFA para administradores, refresh tokens y revocación | Implementados en el Sprint 3 (ADR-0006 y ADR-0009) |
+| Funcionalidades propias del administrador (gestión de usuarios, auditoría) | Sin endpoints: hoy la cuenta `ADMIN` solo inicia sesión y gestiona su sesión |
+| Endpoints de excepciones de disponibilidad | Implementados en el Sprint 3 |
+| Procedimiento almacenado o trigger | Función almacenada del reporte de servicios, Sprint 3 (ADR-0007) |
+| Observabilidad (métricas, dashboard, alertas) | Implementada en el Sprint 3 (ADR-0008) |
 | Actualizar `docs/db.md` y el diagrama de paquetes | Pendiente, hacerlo con este documento como fuente |

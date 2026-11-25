@@ -4,6 +4,7 @@ import co.reservas.application.port.out.auth.CodigoMfaRepositoryPort;
 import co.reservas.domain.usuario.CodigoMfa;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.Optional;
 
 @Repository
@@ -24,5 +25,10 @@ public class CodigoMfaRepositoryJpaAdapter implements CodigoMfaRepositoryPort {
     public Optional<CodigoMfa> buscarUltimoActivo(Integer idUsuario, String codigoHash) {
         return jpa.findFirstByIdUsuarioAndCodigoHashAndUsadoEnIsNullOrderByCreadoEnDesc(idUsuario, codigoHash)
                 .map(CodigoMfaEntity::aDominio);
+    }
+
+    @Override
+    public void invalidarActivos(Integer idUsuario, Instant ahora) {
+        jpa.invalidarActivosPorUsuario(idUsuario, ahora);
     }
 }
