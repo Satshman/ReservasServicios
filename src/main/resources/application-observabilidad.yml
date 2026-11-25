@@ -1,0 +1,19 @@
+# Perfil "observabilidad": expone las métricas para Prometheus en un puerto de gestión separado.
+# Se activa con SPRING_PROFILES_ACTIVE=observabilidad (lo hace docker-compose.observabilidad.yml).
+# El puerto de gestión no se publica en el host: solo Prometheus lo alcanza por la red interna de contenedores.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8091}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name:reservas-servicios}
+    distribution:
+      # Histograma de latencia para calcular percentiles (p95, p99) en Prometheus/Grafana.
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 100ms,300ms,1s

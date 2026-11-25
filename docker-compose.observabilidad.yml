@@ -1,0 +1,72 @@
+# Observabilidad local: Prometheus (métricas y reglas de alerta), Alertmanager (avisos por correo a Mailpit)
+# y Grafana (dashboard aprovisionado). Se superpone al docker-compose.yml base sin modificarlo:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.observabilidad.yml up --build
+#   (o podman-compose con los mismos -f)
+#
+# Grafana:      http://localhost:3001  (usuario admin, clave GRAFANA_ADMIN_PASSWORD, obligatoria en .env)
+# Prometheus:   http://localhost:9390  (Status > Targets, Alerts)
+# Alertmanager: http://localhost:9393  (los avisos llegan a Mailpit: http://localhost:8025)
+#
+# Puertos del host 9390/9393 (no 9090/9093) porque Windows suele reservar el rango 9015-9314 para Hyper-V;
+# se cambian con PROMETHEUS_HOST_PORT y ALERTMANAGER_HOST_PORT.
+#
+# Las métricas de la app se exponen en el puerto de gestión 8091, que NO se publica en el host:
+# solo Prometheus lo alcanza por la red interna del compose.
+
+services:
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: observabilidad
+      MANAGEMENT_PORT: "8091"
+    expose:
+      - "8091"
+
+  prometheus:
+    image: docker.io/prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./observabilidad/prometheus:/etc/prometheus:ro
+      - datos-prometheus:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_HOST_PORT:-9390}:9090"
+    depends_on:
+      - app
+      - alertmanager
+
+  alertmanager:
+    image: docker.io/prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    volumes:
+      - ./observabilidad/alertmanager:/etc/alertmanager:ro
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_HOST_PORT:-9393}:9093"
+    depends_on:
+      - mailpit
+
+  grafana:
+    image: docker.io/grafana/grafana:12.1.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      # Sin valor por defecto: la clave sale de .env y nunca se versiona.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Defina GRAFANA_ADMIN_PASSWORD en .env (ver .env.example)}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/reservas-servicios.json
+    volumes:
+      - ./observabilidad/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observabilidad/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - datos-grafana:/var/lib/grafana
+    ports:
+      # 3001 porque 3000 lo usa el frontend (APP_CORS_ALLOWED_ORIGINS).
+      - "127.0.0.1:${GRAFANA_HOST_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  datos-prometheus:
+  datos-grafana:

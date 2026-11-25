@@ -1,0 +1,100 @@
+# Reglas de alerta. Cada alerta tiene severidad, resumen y la acción esperada ("accion"), para que sea accionable
+# (lineamientos §4.1). Umbrales pensados para el entorno académico; ajustarlos con datos reales de carga.
+groups:
+  - name: disponibilidad
+    rules:
+      - alert: AplicacionCaida
+        expr: up{job="reservas-servicios"} == 0
+        for: 1m
+        labels:
+          severidad: critica
+        annotations:
+          resumen: "La API de reservas no responde a Prometheus"
+          descripcion: "El objetivo {{ $labels.instance }} lleva más de 1 minuto sin responder."
+          accion: "Revisar el contenedor de la app (logs, reinicios) y la conexión a PostgreSQL."
+
+      - alert: TasaErrores5xxAlta
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="reservas-servicios", status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_seconds_count{job="reservas-servicios"}[5m])), 1e-9) > 0.05
+        for: 5m
+        labels:
+          severidad: critica
+        annotations:
+          resumen: "Más del 5% de las peticiones terminan en error 5xx"
+          descripcion: "Tasa de errores del servidor: {{ $value | humanizePercentage }} en los últimos 5 minutos."
+          accion: "Buscar en los logs JSON los eventos ERROR_INTERNO por traceId y revisar despliegues recientes."
+
+      - alert: LatenciaP95Alta
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, uri) (rate(http_server_requests_seconds_bucket{job="reservas-servicios", uri!~"/actuator.*"}[5m]))
+          ) > 1
+        for: 5m
+        labels:
+          severidad: advertencia
+        annotations:
+          resumen: "El p95 de latencia de {{ $labels.uri }} supera 1 segundo"
+          descripcion: "p95 actual: {{ $value | humanizeDuration }}."
+          accion: "Revisar el panel de pool de conexiones y las consultas del endpoint (EXPLAIN ANALYZE)."
+
+  - name: recursos
+    rules:
+      - alert: PoolConexionesAgotado
+        expr: max(hikaricp_connections_pending{job="reservas-servicios"}) > 0
+        for: 2m
+        labels:
+          severidad: advertencia
+        annotations:
+          resumen: "Hay hilos esperando conexión a la base de datos"
+          descripcion: "{{ $value }} peticiones esperan una conexión de Hikari."
+          accion: "Revisar bloqueos largos (SELECT ... FOR UPDATE de reservas) o aumentar el tamaño del pool."
+
+      - alert: MemoriaHeapAlta
+        expr: |
+          sum(jvm_memory_used_bytes{job="reservas-servicios", area="heap"})
+            / sum(jvm_memory_max_bytes{job="reservas-servicios", area="heap"} > 0) > 0.9
+        for: 10m
+        labels:
+          severidad: advertencia
+        annotations:
+          resumen: "El heap de la JVM supera el 90%"
+          descripcion: "Uso de heap: {{ $value | humanizePercentage }}."
+          accion: "Revisar fugas de memoria o subir el límite de memoria del contenedor."
+
+  - name: seguridad
+    rules:
+      - alert: PicoInicioSesionFallido
+        expr: |
+          sum(increase(http_server_requests_seconds_count{job="reservas-servicios", uri="/api/v1/auth/login",
+            codigo_error="CREDENCIALES_INVALIDAS"}[5m])) > 20
+        labels:
+          severidad: advertencia
+        annotations:
+          resumen: "Más de 20 inicios de sesión fallidos en 5 minutos"
+          descripcion: "Posible ataque de fuerza bruta o de relleno de credenciales ({{ $value }} intentos)."
+          accion: "Revisar en los logs los eventos de seguridad por IP de origen y considerar limitar la tasa."
+
+      - alert: CuentasBloqueadas
+        expr: |
+          sum(increase(http_server_requests_seconds_count{job="reservas-servicios",
+            codigo_error="CUENTA_BLOQUEADA"}[15m])) > 3
+        labels:
+          severidad: advertencia
+        annotations:
+          resumen: "Varias cuentas bloqueadas por intentos fallidos"
+          descripcion: "{{ $value }} rechazos por cuenta bloqueada en 15 minutos."
+          accion: "Confirmar si es un ataque dirigido; las cuentas se desbloquean solas al vencer el bloqueo."
+
+  - name: negocio
+    rules:
+      - alert: DemandaSuperaCapacidad
+        expr: |
+          sum(increase(http_server_requests_seconds_count{job="reservas-servicios", uri="/api/v1/reservas",
+            codigo_error="TURNO_SIN_CUPO"}[30m])) > 10
+        labels:
+          severidad: informativa
+        annotations:
+          resumen: "Muchas reservas rechazadas por turnos sin cupo"
+          descripcion: "{{ $value }} intentos de reserva rechazados por sobrecupo en 30 minutos."
+          accion: "Avisar a los proveedores: conviene ampliar la agenda o la capacidad de los servicios más demandados."

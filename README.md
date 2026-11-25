@@ -22,10 +22,12 @@ Proyecto académico de CodeF@ctory UdeA 2026-2, perfil de equipo avanzado. El di
 | 3 | HU-13 | Generar reportes de desempeño de servicios mediante función almacenada en PostgreSQL |
 | 3 | Bug-84 | Corrección del generador de turnos ante cambios al horario de verano (DST) |
 | 3 | Seguridad y Agenda | Excepciones de disponibilidad, *refresh tokens* con rotación/revocación y MFA para administradores |
+| 3 | Observabilidad | Métricas en Prometheus, dashboard en Grafana y alertas por correo con Alertmanager ([ADR-0008](docs/adr/0008-observabilidad-con-prometheus-y-grafana.md)) |
+| 3 | Pruebas | Pruebas de integración de sesiones, excepciones de disponibilidad y reportes; pruebas de aceptación en Gherkin con Cucumber |
 
 ## Tecnologías
 
-Java 21 · Spring Boot 4.1 (Web MVC, Data JPA, Security con OAuth2 Resource Server, Validation, Mail, Actuator) · PostgreSQL 17 · Flyway · springdoc-openapi · JUnit 5, Mockito, Testcontainers · JaCoCo · Docker/Podman Compose.
+Java 21 · Spring Boot 4.1 (Web MVC, Data JPA, Security con OAuth2 Resource Server, Validation, Mail, Actuator) · PostgreSQL 17 · Flyway · springdoc-openapi · Micrometer, Prometheus, Grafana, Alertmanager · JUnit, Mockito, Testcontainers, Cucumber · JaCoCo · Docker/Podman Compose.
 
 Arquitectura hexagonal en `co.reservas`: `domain` (Java puro), `application` (casos de uso y puertos), `adapters` (web, persistencia JPA, seguridad y correo) e `infrastructure` (arranque y configuración).
 
@@ -61,6 +63,29 @@ PORT=8082 APP_BASE_URL=http://localhost:8082 ./mvnw spring-boot:run -Dspring-boo
 
 El perfil `dev` trae valores locales (base en `localhost:5433`, SMTP en `localhost:1025`, un secreto JWT solo para desarrollo) y logs legibles. Sin perfil, los logs salen en JSON (formato ECS) y toda la configuración se toma de variables de entorno (ver `.env.example`).
 
+## Observabilidad (Prometheus y Grafana)
+
+Un segundo archivo de Compose agrega Prometheus, Alertmanager y Grafana sobre el stack anterior, sin modificar `docker-compose.yml`. Antes, defina `GRAFANA_ADMIN_PASSWORD` en `.env` (ver `.env.example`):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observabilidad.yml up --build
+# o: podman-compose -f docker-compose.yml -f docker-compose.observabilidad.yml up --build
+```
+
+| Herramienta | URL |
+|-------------|-----|
+| Grafana (dashboard «Reservas de Servicios») | http://localhost:3001 (usuario `admin`, clave `GRAFANA_ADMIN_PASSWORD` de `.env`) |
+| Prometheus (objetivos y alertas) | http://localhost:9390 |
+| Alertmanager | http://localhost:9393 |
+| Correos de las alertas | Mailpit, http://localhost:8025 |
+
+- La aplicación arranca con el perfil `observabilidad`, que publica `/actuator/prometheus` en el **puerto de gestión 8091**. Ese puerto no se publica en el host: solo Prometheus lo alcanza por la red interna de Compose. Por el puerto de la API la ruta responde 401. Con este perfil, `/actuator/health` también pasa al puerto de gestión, así que el perfil no se activa en Render.
+- La métrica `http_server_requests_seconds` lleva la etiqueta `codigo_error` con el código de la regla de negocio que rechazó la petición (`TURNO_SIN_CUPO`, `CREDENCIALES_INVALIDAS`, `CUENTA_BLOQUEADA`…). De ella salen los paneles de negocio: reservas creadas y canceladas, rechazos por sobrecupo e inicios de sesión fallidos.
+- `observabilidad/prometheus/alertas.yml` define 8 alertas de disponibilidad, recursos, seguridad y negocio, cada una con la acción esperada. Alertmanager las envía por correo a Mailpit.
+- Los puertos 9390 y 9393 evitan el rango 9015–9314, que Windows suele reservar para Hyper-V. Se cambian con `PROMETHEUS_HOST_PORT`, `ALERTMANAGER_HOST_PORT` y `GRAFANA_HOST_PORT`.
+
+La guía de demostración y verificación está en [`docs/observabilidad-y-pruebas.md`](docs/observabilidad-y-pruebas.md).
+
 ## Pruebas
 
 Las pruebas de integración usan Testcontainers con PostgreSQL real, así que necesitan un motor de contenedores. Con Podman sin root, exporte antes:
@@ -76,8 +101,11 @@ export TESTCONTAINERS_RYUK_DISABLED=true
 | Solo ejecutar pruebas | `./mvnw test` |
 | Una clase de prueba | `./mvnw test -Dtest=ReservaIntegracionTest` |
 | Un método de prueba | `./mvnw test -Dtest=IniciarSesionServiceTest#cuentaBloqueada` |
+| Solo las pruebas de aceptación (Gherkin) | `./mvnw test -Dtest=AceptacionTest` |
 
-El reporte de cobertura queda en `target/site/jacoco/index.html`. Las pruebas siguen el patrón AAA y sus nombres (`@DisplayName`) describen el escenario Gherkin de cada criterio de aceptación. Las clases `*IntegracionTest` recorren la API con MockMvc; el resto son pruebas unitarias del dominio, los servicios de aplicación y los adaptadores.
+El reporte de cobertura queda en `target/site/jacoco/index.html`. Las pruebas siguen el patrón AAA y sus nombres (`@DisplayName`) describen el escenario Gherkin de cada criterio de aceptación. Las clases `*IntegracionTest` recorren la API con MockMvc; el resto son pruebas unitarias del dominio, los servicios de aplicación y los adaptadores. `ObservabilidadIntegracionTest` arranca la aplicación en puertos reales para comprobar lo que lee Prometheus.
+
+Las pruebas de aceptación del backend son escenarios Gherkin en español (`src/test/resources/features/`), ejecutados con Cucumber sobre el mismo contexto de las pruebas de integración. Sus pasos están en `src/test/java/co/reservas/aceptacion/`. Cubren HU-03, HU-07, HU-08 y HU-15, y la revocación de sesiones. `./mvnw verify` las incluye, y su reporte queda en `target/cucumber/aceptacion.html`.
 
 ## Contrato de la API
 
@@ -165,3 +193,6 @@ El contenedor escucha el puerto que indica la variable `PORT`, que Render inyect
 | `LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCK_DURATION` | Política de bloqueo | `5`, `15m` |
 | `CANCELACION_ANTICIPACION_MINIMA` | Anticipación mínima con la que un cliente puede cancelar (`5d`, `48h`, `90m`…) | `5d` |
 | `PORT`, `SWAGGER_ENABLED` | Puerto HTTP y publicación de Swagger | `8080`, `true` |
+| `MANAGEMENT_PORT` | Puerto de gestión del actuador (solo con el perfil `observabilidad`) | `8091` |
+| `GRAFANA_ADMIN_PASSWORD` | Clave del usuario `admin` de Grafana (`docker-compose.observabilidad.yml`) | obligatoria con ese compose |
+| `PROMETHEUS_HOST_PORT`, `ALERTMANAGER_HOST_PORT`, `GRAFANA_HOST_PORT` | Puertos del host de las herramientas de observabilidad | `9390`, `9393`, `3001` |

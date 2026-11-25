@@ -15,6 +15,7 @@ Los lineamientos §3.7 exigen **mínimo 3 ADR priorizados** en el Sprint 1.
 | [0005](0005-migraciones-versionadas-con-flyway-y-validacion-de-esquema.md) | Migraciones versionadas con Flyway y validación de esquema por Hibernate | Aceptada | 2026-09-17 | Persistencia, gestión del esquema, entornos | Equipo Avanzado — Isaac Mesa |
 | [0006](0006-sesiones-revocables-con-tokens-de-refresco-rotativos.md) | Sesiones revocables con tokens de refresco rotativos y detección de reutilización | Aceptada | 2026-11-23 | Seguridad, gestión de sesiones, revocación de credenciales | Equipo Avanzado — Isaac Mesa |
 | [0007](0007-agregacion-del-reporte-de-servicios-en-una-funcion-almacenada.md) | La agregación del reporte de desempeño de servicios vive en una función almacenada | Aceptada | 2026-11-23 | Persistencia, ubicación de la lógica de consulta, regla de dependencia | Equipo Avanzado — Isaac Mesa |
+| [0008](0008-observabilidad-con-prometheus-y-grafana.md) | Observabilidad con Prometheus y Grafana, con métricas de negocio derivadas de la métrica HTTP | Propuesta | 2026-11-24 | Observabilidad, operación, seguridad del endpoint de métricas | Equipo Avanzado — Sara Mesa |
 
 ## Qué decidió cada sprint
 
